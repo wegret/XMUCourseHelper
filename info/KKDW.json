@@ -1,0 +1,324 @@
+[
+    {
+        "code": "101008",
+        "name": "学生工作部(处)/人民武装部",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103081",
+        "name": "美育与通识教育中心",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "102002",
+        "name": "图书馆",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "102005",
+        "name": "教师发展中心",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103003",
+        "name": "新闻传播学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103004",
+        "name": "外文学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103005",
+        "name": "经济学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103006",
+        "name": "王亚南经济研究院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103007",
+        "name": "管理学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103008",
+        "name": "财务管理与会计研究院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103009",
+        "name": "法学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103010",
+        "name": "知识产权研究院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103013",
+        "name": "公共事务学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103014",
+        "name": "公共政策研究院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103015",
+        "name": "艺术学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103016",
+        "name": "马克思主义学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103017",
+        "name": "国际中文教育学院/海外教育学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103018",
+        "name": "国际关系学院/南洋研究院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103019",
+        "name": "数学科学学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103020",
+        "name": "物理科学与技术学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103021",
+        "name": "化学化工学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103022",
+        "name": "材料学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103023",
+        "name": "生命科学学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103024",
+        "name": "海洋与地球学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103025",
+        "name": "环境与生态学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103028",
+        "name": "建筑与土木工程学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103029",
+        "name": "医学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103030",
+        "name": "药学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103031",
+        "name": "公共卫生学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103032",
+        "name": "能源学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103033",
+        "name": "萨本栋微米纳米科学技术研究院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103034",
+        "name": "台湾研究院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103035",
+        "name": "教育研究院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103036",
+        "name": "体育教学部",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103038",
+        "name": "航空航天学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103040",
+        "name": "电子科学与技术学院（国家示范性微电子学院）",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103046",
+        "name": "社会与人类学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103048",
+        "name": "信息学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103054",
+        "name": "电影学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103055",
+        "name": "柔性电子（未来技术）研究院（院）",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103056",
+        "name": "中国语言文学系",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103057",
+        "name": "哲学系",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103058",
+        "name": "历史与文化遗产学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103059",
+        "name": "邹至庄经济研究院(院)",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "103080",
+        "name": "创意与创新学院",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    },
+    {
+        "code": "101008012",
+        "name": "少数民族预科班",
+        "serialNumber": null,
+        "reserve1": null,
+        "reserve2": null
+    }
+]
