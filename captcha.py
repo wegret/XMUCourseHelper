@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2024-12-31 08:25:34
-LastEditTime: 2024-12-31 08:55:36
+LastEditTime: 2025-01-01 18:24:30
 Discription: file content
 '''
 import base64
@@ -35,7 +35,7 @@ def request_with_retry(method, url, session, max_retries=3, **kwargs):
     """带重试机制的请求方法"""
     for i in range(max_retries):
         try:
-            response = session.request(method, url, verify=False, **kwargs)
+            response = session.request(method, url, **kwargs)
             response.raise_for_status()
             return response
         except requests.exceptions.RequestException as e:

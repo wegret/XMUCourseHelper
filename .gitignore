@@ -3,4 +3,4 @@ config/
 cache/
 *.log
 tmp.json
-__pycache__/captcha.cpython-39.pyc
+__pycache__
