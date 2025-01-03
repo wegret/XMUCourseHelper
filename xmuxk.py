@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2024-12-31 07:23:59
-LastEditTime: 2025-01-03 22:27:23
+LastEditTime: 2025-01-03 23:38:02
 Discription: file content
 '''
 
@@ -121,6 +121,7 @@ def listen_loop(xmu, course_controller, interval, autoadd_enabled=False, random_
                         console.print(f"[yellow]{course_name} 暂无空位[/yellow]")
                 else:
                     console.print(f"[red]未找到课程 {course_name} (JXBID={jxbid})，可能已下架或查询条件有误。[/red]")
+                    return 
         
         next_interval = interval
         if random_adjustment:
@@ -144,42 +145,41 @@ def main():
     parser.add_argument("--random", action="store_true", help="是否启用随机调整查询间隔")
     args = parser.parse_args()
     
-    print("正在登录...")
-    xmu = XMULogin()
-    if not xmu.login():
-        print("登录失败！")
-        return
+    while True:
+        console.print("[bold][red]正在登录...[/red][/bold]")
+        xmu = XMULogin()
+        if not xmu.login():
+            console.print("[red]登录失败！[/red]")
+            continue
 
-    if not xmu.batch_id:
-        print("未获取到 Batch ID，请检查登录响应。")
-        return
+        if not xmu.batch_id:
+            print("未获取到 Batch ID，请检查登录响应。")
+            continue
 
-    course_controller = XMUCourseController(xmu.session, xmu.token, xmu.batch_id)
+        course_controller = XMUCourseController(xmu.session, xmu.token, xmu.batch_id)
 
-    if args.watch:
-        class_type_map = load_class_type_map()
-        if not args.type or args.type not in class_type_map:
-            console.print("[red]无效或缺少 --type，请检查输入。[/red]")
-            return
+        if args.watch:
+            class_type_map = load_class_type_map()
+            if not args.type or args.type not in class_type_map:
+                console.print("[red]无效或缺少 --type，请检查输入。[/red]")
+                return
 
-        campus = xmu.campus
+            campus = xmu.campus
 
-        teaching_class_type = class_type_map[args.type]
-        keyword = args.key if args.key else None
+            teaching_class_type = class_type_map[args.type]
+            keyword = args.key if args.key else None
 
-        # 查课 & 添加监听
-        watch_courses(
-            xmu_login=xmu,
-            course_controller=course_controller,
-            teaching_class_type=teaching_class_type,
-            campus=campus,
-            keyword=keyword
-        )
-        return
+            # 查课 & 添加监听
+            watch_courses(
+                xmu_login=xmu,
+                course_controller=course_controller,
+                teaching_class_type=teaching_class_type,
+                campus=campus,
+                keyword=keyword
+            )
 
-    if args.listen:
-        listen_loop(xmu, course_controller, args.interval, autoadd_enabled=args.autoadd, random_adjustment=args.random)
-        return
+        if args.listen:
+            listen_loop(xmu, course_controller, args.interval, autoadd_enabled=args.autoadd, random_adjustment=args.random)
     
     # if args.search:
     #     req = {

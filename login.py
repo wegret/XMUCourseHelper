@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2025-01-01 18:06:37
-LastEditTime: 2025-01-03 22:19:31
+LastEditTime: 2025-01-03 23:35:57
 Discription: file content
 '''
 
@@ -125,10 +125,15 @@ class XMULogin:
         captcha_result = self.get_captcha()
         if not captcha_result:
             raise Exception("获取验证码失败")
+            return False
 
         if self.captcha_auto:
             print('正在自动识别验证码...')
-            captcha_code = captcha_verify(captcha_result['image_base64'])
+            try:
+                captcha_code = captcha_verify(captcha_result['image_base64'])
+            except Exception as e:
+                logging.error(f"验证码识别出错: {str(e)}")
+                return False
             print(f'验证码识别结果: {captcha_code}')
         else:
             captcha_code = input('请输入验证码: ')
