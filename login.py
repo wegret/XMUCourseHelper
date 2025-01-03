@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2025-01-01 18:06:37
-LastEditTime: 2025-01-01 18:37:59
+LastEditTime: 2025-01-03 13:44:24
 Discription: file content
 '''
 
@@ -46,6 +46,7 @@ class XMULogin:
                 config = yaml.safe_load(f)
                 self.username = config['username']
                 self.password = config['password']
+                self.campus = config.get('campus', '6')
                 self.captcha_auto = config.get('captcha_auto', False)
                 
                 logging.info('配置文件加载成功')

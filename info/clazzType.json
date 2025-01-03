@@ -1,0 +1,30 @@
+[
+    {
+        "teachingClassType": "TJKC",
+        "displayName": "本专业计划课程"
+    },
+    {
+        "teachingClassType": "FANKC",
+        "displayName": "本专业其他年级课程"
+    },
+    {
+        "teachingClassType": "FAWKC",
+        "displayName": "方案外课程"
+    },
+    {
+        "teachingClassType": "TYKC",
+        "displayName": "体育/大学英语课程"
+    },
+    {
+        "teachingClassType": "XGKC",
+        "displayName": "校选课"
+    },
+    {
+        "teachingClassType": "ALLKC",
+        "displayName": "全校课程查询"
+    },
+    {
+        "teachingClassType": "YXKC",
+        "displayName": "已选课程"
+    }
+]

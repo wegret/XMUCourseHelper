@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2025-01-01 18:06:46
-LastEditTime: 2025-01-01 18:26:20
+LastEditTime: 2025-01-03 15:20:31
 Discription: file content
 '''
 
@@ -17,7 +17,7 @@ class XMUCourseController:
         self.batch_id = batch_id
         self.session.headers.update({
             'Authorization': self.token,
-            'Content-Type': 'application/json;charset=UTF-8',  # 修改为 JSON 类型
+            'Content-Type': 'application/json;charset=UTF-8', 
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
             'Accept': 'application/json, text/plain, */*',
             'Origin': 'https://xk.xmu.edu.cn',
