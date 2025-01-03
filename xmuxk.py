@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2024-12-31 07:23:59
-LastEditTime: 2025-01-03 21:28:43
+LastEditTime: 2025-01-03 22:27:23
 Discription: file content
 '''
 
@@ -14,6 +14,7 @@ from course_controller import XMUCourseController
 import logging
 import time
 import questionary
+import random
 
 import warnings
 import urllib3
@@ -120,9 +121,16 @@ def listen_loop(xmu, course_controller, interval, autoadd_enabled=False, random_
                         console.print(f"[yellow]{course_name} 暂无空位[/yellow]")
                 else:
                     console.print(f"[red]未找到课程 {course_name} (JXBID={jxbid})，可能已下架或查询条件有误。[/red]")
-
-        console.print(f"\n等待 [cyan]{interval}[/cyan] 秒后再次查询...\n")
-        time.sleep(interval)
+        
+        next_interval = interval
+        if random_adjustment:
+            adjust_fac = 0.5
+            min_interval = int(interval * (1 - adjust_fac))
+            max_interval = int(interval * (1 + adjust_fac))
+            next_interval = int(random.uniform(min_interval, max_interval))
+        
+        console.print(f"\n等待 [cyan]{next_interval}[/cyan] 秒后再次查询...\n")
+        time.sleep(next_interval)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -133,6 +141,7 @@ def main():
     parser.add_argument("--type", help="选课类型的显示名称，例如：本专业计划课程")
     parser.add_argument("--key", help="搜索关键词")
     parser.add_argument("--autoadd", action="store_true", help="是否启用自动添加监听课程")
+    parser.add_argument("--random", action="store_true", help="是否启用随机调整查询间隔")
     args = parser.parse_args()
     
     print("正在登录...")
@@ -169,7 +178,7 @@ def main():
         return
 
     if args.listen:
-        listen_loop(xmu, course_controller, args.interval, autoadd_enabled=args.autoadd)
+        listen_loop(xmu, course_controller, args.interval, autoadd_enabled=args.autoadd, random_adjustment=args.random)
         return
     
     # if args.search:
