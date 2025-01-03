@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2025-01-03 13:28:48
-LastEditTime: 2025-01-03 14:48:30
+LastEditTime: 2025-01-03 22:13:25
 Discription: file content
 '''
 import json 
@@ -57,7 +57,7 @@ def watch_courses(xmu_login, course_controller, teaching_class_type, campus, key
             req["KEY"] = keyword
 
         response_data = course_controller.search_courses(req)
-        print(response_data)
+        # print(response_data)
         if not response_data:
             console.print("[red]未能获取到搜索结果。[/red]")
             break
@@ -68,11 +68,21 @@ def watch_courses(xmu_login, course_controller, teaching_class_type, campus, key
             course_name = course.get('KCM', '无名课程')
             teacher = course.get('SKJS', '未知教师')
             
+            # TODO: 校选课没这个字段
             classlist = course['tcList']
             for c in classlist:
                 teacher = c.get('SKJS', '未知教师')
                 teaching_place = c.get('teachingPlace', '未知地点')
-                title = f"{idx}. {course_name} | 教师: {teacher} | 地点: {teaching_place}"
+                number_of_selected = c.get('numberOfSelected', -1)
+                class_capacity = c.get('classCapacity', -1)
+                    
+                title = f"{course_name} | {teacher} | 已选/容量: {number_of_selected}/{class_capacity} | 地点: {teaching_place} "
+                
+                # print(f"conflic:{c.get('conflictDesc', '')}")
+                if c.get('conflictDesc', '') != '' or course.get('conflictDesc', '') != '':
+                    title = f"【时间冲突)】{title}"
+                title = f"{idx + (page_number - 1) * 10}. {title}"
+                
                 choices.append(questionary.Choice(title=title, value=c))
 
         # 加一个“下一页”或“退出”的选项

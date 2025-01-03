@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2024-12-31 07:23:59
-LastEditTime: 2025-01-03 15:17:46
+LastEditTime: 2025-01-03 21:28:43
 Discription: file content
 '''
 
@@ -44,16 +44,18 @@ def alert_user(course_name, number_of_selected, class_capacity):
     show_message()
     
     
-def listen_loop(xmu, course_controller, interval):
+def listen_loop(xmu, course_controller, interval, autoadd_enabled=False, random_adjustment=False):
     """
     持续监听 watch_list.json 中的课程，定时查询更新 secretVal、选课人数、容量并判断是否有空位
+    autoadd_enabled: 是否启用自动添加监听课程
+    random_adjustment: 是否启用随机调整查询间隔
     """
     while True:
         watch_list = load_watch_list()
         if not watch_list:
             console.print("[yellow]当前监听列表为空，请先添加监听课程。[/yellow]")
         else:
-            for course_info in watch_list:
+            for course_info in watch_list[:]:       # 做副本，避免迭代时删除元素
                 jxbid = course_info.get('JXBID')
                 course_name = course_info.get('courseName_zh', '未知课程')
                 teaching_class_type = course_info.get('clazzType')
@@ -91,12 +93,27 @@ def listen_loop(xmu, course_controller, interval):
                     # 输出课程现况
                     console.print(f"\n[bold]课程[/bold]: [cyan]{course_name}[/cyan]")
                     console.print(f"[bold]JXBID[/bold]: {jxbid}")
-                    console.print(f"[bold]secretVal[/bold]: {secret_val}")
+                    # console.print(f"[bold]secretVal[/bold]: {secret_val}")
                     console.print(f"[bold]已选人数[/bold]: {number_of_selected} / [bold]容量[/bold]: {class_capacity}")
 
                     # 判断是否有空位
                     if number_of_selected < class_capacity:
                         console.print(f"[green]{course_name} 有空位！[/green]")
+                        if autoadd_enabled:
+                            add_result = course_controller.add_course(
+                                clazz_type=teaching_class_type,
+                                clazz_id=jxbid,
+                                secret_val=secret_val
+                            )
+                            if add_result and add_result.get('code') == 200:
+                                console.print(f"[green]选课成功: {course_name}[/green]")
+                                
+                                # 选课成功后从 watch_list 中移除
+                                watch_list.remove(course_info)
+                                save_watch_list(watch_list)
+                            else:
+                                error_msg = add_result.get('msg', '未知错误') if add_result else '未知错误'
+                                console.print(f"[red]选课失败: {error_msg}[/red]")
                         alert_user(course_name, number_of_selected, class_capacity)
                         print("继续执行....")
                     else:
@@ -115,6 +132,7 @@ def main():
     parser.add_argument("--interval", type=int, default=60, help="监听模式下的查询间隔秒数，默认 60 秒")
     parser.add_argument("--type", help="选课类型的显示名称，例如：本专业计划课程")
     parser.add_argument("--key", help="搜索关键词")
+    parser.add_argument("--autoadd", action="store_true", help="是否启用自动添加监听课程")
     args = parser.parse_args()
     
     print("正在登录...")
@@ -151,7 +169,7 @@ def main():
         return
 
     if args.listen:
-        listen_loop(xmu, course_controller, args.interval)
+        listen_loop(xmu, course_controller, args.interval, autoadd_enabled=args.autoadd)
         return
     
     # if args.search:

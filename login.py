@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2025-01-01 18:06:37
-LastEditTime: 2025-01-03 13:44:24
+LastEditTime: 2025-01-03 22:19:31
 Discription: file content
 '''
 
@@ -86,6 +86,8 @@ class XMULogin:
                         'uuid': uuid,
                         'image_base64': captcha_base64
                     }
+                
+        
                 
                 # 将base64转换为图片
                 from PIL import Image
