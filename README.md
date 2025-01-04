@@ -86,3 +86,5 @@ python xmuxk.py --listen [--interval <间隔时间>]  # interval 选填，单位
 - [ ] 有空缺时自动选课
 
 - [ ] 接入聊天机器人
+
+- [ ] kivy打包成安卓应用？这样可以在手机端后台运行

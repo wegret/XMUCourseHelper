@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2024-12-31 07:23:59
-LastEditTime: 2025-01-03 23:38:02
+LastEditTime: 2025-01-04 15:03:23
 Discription: file content
 '''
 
@@ -132,6 +132,14 @@ def listen_loop(xmu, course_controller, interval, autoadd_enabled=False, random_
         
         console.print(f"\n等待 [cyan]{next_interval}[/cyan] 秒后再次查询...\n")
         time.sleep(next_interval)
+        
+        
+import ctypes
+
+def alert_error(msg):
+    MessageBox = ctypes.windll.user32.MessageBoxW
+    MessageBox(None, msg, "Error", 0)
+    
 
 def main():
     parser = argparse.ArgumentParser()
@@ -145,16 +153,25 @@ def main():
     parser.add_argument("--random", action="store_true", help="是否启用随机调整查询间隔")
     args = parser.parse_args()
     
+    failure_cnt = 0
+    
     while True:
+        if failure_cnt >= 5:
+            alert_error("xk.xmu.edu.cn出错，或网络中断")
+        
         console.print("[bold][red]正在登录...[/red][/bold]")
         xmu = XMULogin()
         if not xmu.login():
             console.print("[red]登录失败！[/red]")
+            failure_cnt += 1
             continue
 
         if not xmu.batch_id:
             print("未获取到 Batch ID，请检查登录响应。")
+            failure_cnt += 1
             continue
+        
+        failure_cnt = 0
 
         course_controller = XMUCourseController(xmu.session, xmu.token, xmu.batch_id)
 

@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2025-01-01 18:06:37
-LastEditTime: 2025-01-03 23:35:57
+LastEditTime: 2025-01-04 13:34:30
 Discription: file content
 '''
 
@@ -25,7 +25,7 @@ class XMULogin:
         self.batch_id = None
 
         try:
-            self.session.get('https://xk.xmu.edu.cn/xsxkxmu/profile/index.html')
+            self.session.get('https://xk.xmu.edu.cn/xsxkxmu/profile/index.html', verify=False)
         except Exception as e:
             logging.warning(f"初始访问首页失败: {str(e)}")
 
@@ -124,7 +124,7 @@ class XMULogin:
         # 获取验证码
         captcha_result = self.get_captcha()
         if not captcha_result:
-            raise Exception("获取验证码失败")
+            logging.error("获取验证码失败")
             return False
 
         if self.captcha_auto:
