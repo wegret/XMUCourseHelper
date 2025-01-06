@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2024-12-31 07:23:59
-LastEditTime: 2025-01-04 15:03:23
+LastEditTime: 2025-01-04 20:35:16
 Discription: file content
 '''
 
@@ -15,6 +15,7 @@ import logging
 import time
 import questionary
 import random
+from collections import defaultdict
 
 import warnings
 import urllib3
@@ -22,27 +23,49 @@ warnings.simplefilter('ignore', urllib3.exceptions.InsecureRequestWarning)
 
 from watch import load_class_type_map, load_watch_list, save_watch_list, watch_courses
 
-
-import tkinter as tk
-from tkinter import messagebox
-import threading
+import sys
 
 def alert_user(course_name, number_of_selected, class_capacity):
     """
     播放提示音并显示提示框
     """
-    print('\a')  
+    
+    if sys.platform.startswith('win'):
+        import tkinter as tk
+        from tkinter import messagebox
+        
+        print('\a')  
 
-    def show_message():
-        root = tk.Tk()
-        root.withdraw() 
-        messagebox.showinfo(
-            "课程有空位啦！",
-            f"课程: {course_name}\n已选人数: {number_of_selected}/{class_capacity}"
-        )
-        root.destroy()
+        def show_message():
+            root = tk.Tk()
+            root.withdraw() 
+            messagebox.showinfo(
+                "课程有空位啦！",
+                f"课程: {course_name}\n已选人数: {number_of_selected}/{class_capacity}"
+            )
+            root.destroy()
 
-    show_message()
+        show_message()
+    else:
+        import requests
+        
+        data = {
+            "msg_type": "course_alert",
+            "course_name": course_name,
+            "selected": number_of_selected,
+            "capacity": class_capacity
+        }
+        
+        try:
+            # TODO 这里路由应该在config里配置
+            r = requests.post("http://127.0.0.1:8080/alert", json=data, timeout=5)
+            if r.status_code != 200:
+                console.print(f"[red]发送提示失败: {r.text}[/red]")
+            else:
+                console.print("[green]已发送提示。[/green]")
+        except Exception as e:
+            console.print(f"[red]发送提示失败: {str(e)}[/red]")
+        
     
     
 def listen_loop(xmu, course_controller, interval, autoadd_enabled=False, random_adjustment=False):
@@ -56,6 +79,38 @@ def listen_loop(xmu, course_controller, interval, autoadd_enabled=False, random_
         if not watch_list:
             console.print("[yellow]当前监听列表为空，请先添加监听课程。[/yellow]")
         else:
+            watch_list_typed = defaultdict(list)
+            for course_info in watch_list:
+                watch_list_typed[course_info.get('clazzType')].append(course_info)
+                
+            tykc_dict = {}
+            if 'TYKC' in watch_list_typed:
+                req_tykc = {
+                    "teachingClassType": "TYKC",
+                    "pageNumber": 1,
+                    "pageSize": 10,
+                    "orderBy": "",
+                    "campus": xmu.campus
+                }
+                
+                response_data_tykc = []
+                while True:
+                    response_data = course_controller.search_courses(req_tykc)
+                    if not response_data:
+                        console.print("[red]未能获取到课程。[/red]")
+                        return
+                    
+                    response_data_tykc.extend(response_data)
+                    
+                    if len(response_data) < 10:
+                        break
+                    req_tykc["pageNumber"] += 1
+                
+                for course in response_data_tykc:
+                    for c in course.get('tcList', []):
+                        tykc_dict[c.get('JXBID')] = c
+                
+            
             for course_info in watch_list[:]:       # 做副本，避免迭代时删除元素
                 jxbid = course_info.get('JXBID')
                 course_name = course_info.get('courseName_zh', '未知课程')
@@ -63,27 +118,31 @@ def listen_loop(xmu, course_controller, interval, autoadd_enabled=False, random_
                 if not jxbid or not teaching_class_type:
                     console.print(f"[red]监听列表中缺少 JXBID 或 clazzType，跳过此条课程。[/red]")
                     continue
+                
+                if teaching_class_type == 'TYKC':
+                    found_course = tykc_dict.get(jxbid)
+                
+                else:
+                    req = {
+                        "teachingClassType": teaching_class_type,
+                        "pageNumber": 1,
+                        "pageSize": 10,
+                        "orderBy": "",
+                        "campus": xmu.campus
+                    }
+                    req["KEY"] = course_name
 
-                req = {
-                    "teachingClassType": teaching_class_type,
-                    "pageNumber": 1,
-                    "pageSize": 10,
-                    "orderBy": "",
-                    "campus": xmu.campus
-                }
-                req["KEY"] = course_name
+                    response_data = course_controller.search_courses(req)
 
-                response_data = course_controller.search_courses(req)
-
-                found_course = None
-                if response_data:
-                    for c in response_data:
-                        for sub_course in c.get('tcList', []):
-                            if sub_course.get('JXBID') == jxbid:
-                                found_course = sub_course
+                    found_course = None
+                    if response_data:
+                        for c in response_data:
+                            for sub_course in c.get('tcList', []):
+                                if sub_course.get('JXBID') == jxbid:
+                                    found_course = sub_course
+                                    break
+                            if found_course:
                                 break
-                        if found_course:
-                            break
 
                 # 如果找到了对应 JXBID 的课程
                 if found_course:
@@ -100,6 +159,11 @@ def listen_loop(xmu, course_controller, interval, autoadd_enabled=False, random_
                     # 判断是否有空位
                     if number_of_selected < class_capacity:
                         console.print(f"[green]{course_name} 有空位！[/green]")
+                        
+                        if not sys.platform.startswith('win'):  # Linux下，特判一下，删掉这个课程
+                            watch_list.remove(course_info)
+                            save_watch_list(watch_list) # TODO：这是不对的，应该在数据库中判断变化，而不是直接删除
+                        
                         if autoadd_enabled:
                             add_result = course_controller.add_course(
                                 clazz_type=teaching_class_type,
@@ -133,12 +197,29 @@ def listen_loop(xmu, course_controller, interval, autoadd_enabled=False, random_
         console.print(f"\n等待 [cyan]{next_interval}[/cyan] 秒后再次查询...\n")
         time.sleep(next_interval)
         
-        
-import ctypes
 
 def alert_error(msg):
-    MessageBox = ctypes.windll.user32.MessageBoxW
-    MessageBox(None, msg, "Error", 0)
+    if sys.platform.startswith('win'):
+        import ctypes
+        MessageBox = ctypes.windll.user32.MessageBoxW
+        MessageBox(None, msg, "Error", 0)
+    else:
+        import requests
+        
+        data = {
+            "msg_type": "error_alert",
+            "msg": msg
+        }
+        
+        try:
+            # TODO 这里路由应该在config里配置
+            r = requests.post("http://127.0.0.1:8080/alert", json=data, timeout=5)
+            if r.status_code != 200:
+                console.print(f"[red]发送提示失败: {r.text}[/red]")
+            else:
+                console.print("[green]已发送提示。[/green]")
+        except Exception as e:
+            console.print(f"[red]发送提示失败: {str(e)}[/red]")
     
 
 def main():
@@ -151,6 +232,7 @@ def main():
     parser.add_argument("--key", help="搜索关键词")
     parser.add_argument("--autoadd", action="store_true", help="是否启用自动添加监听课程")
     parser.add_argument("--random", action="store_true", help="是否启用随机调整查询间隔")
+    parser.add_argument("--all", action="store_true", help="自动选中所有搜索到的课程")
     args = parser.parse_args()
     
     failure_cnt = 0
@@ -187,13 +269,16 @@ def main():
             keyword = args.key if args.key else None
 
             # 查课 & 添加监听
-            watch_courses(
+            ret = watch_courses(
                 xmu_login=xmu,
                 course_controller=course_controller,
                 teaching_class_type=teaching_class_type,
                 campus=campus,
-                keyword=keyword
+                keyword=keyword,
+                add_all=args.all
             )
+            if ret == False:
+                return 
 
         if args.listen:
             listen_loop(xmu, course_controller, args.interval, autoadd_enabled=args.autoadd, random_adjustment=args.random)

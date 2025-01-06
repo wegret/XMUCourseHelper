@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2025-01-03 13:28:48
-LastEditTime: 2025-01-03 22:13:25
+LastEditTime: 2025-01-04 20:01:08
 Discription: file content
 '''
 import json 
@@ -36,7 +36,7 @@ def save_watch_list(watch_list):
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(watch_list, f, ensure_ascii=False, indent=2)
         
-def watch_courses(xmu_login, course_controller, teaching_class_type, campus, keyword=None):
+def watch_courses(xmu_login, course_controller, teaching_class_type, campus, keyword=None, add_all=False):
     """
     1. 根据给定的 teaching_class_type、campus、keyword 搜索课程
     2. 展示搜索结果，让用户选择想要监听的课程
@@ -60,7 +60,21 @@ def watch_courses(xmu_login, course_controller, teaching_class_type, campus, key
         # print(response_data)
         if not response_data:
             console.print("[red]未能获取到搜索结果。[/red]")
-            break
+            return False
+        
+        if add_all:
+            # 如果是 --add-all 参数，直接将所有课程加入监听列表
+            watch_list = load_watch_list()
+            for course in response_data:
+                for c in course['tcList']:
+                    c['clazzType'] = teaching_class_type
+                    watch_list.append(c)
+            save_watch_list(watch_list)
+            if len(response_data) < 10:
+                console.print("[green]已将所有搜索结果加入监听列表。[/green]")
+                return False
+            page_number += 1
+            continue
 
         # 给用户展示并选择课程
         choices = []
@@ -98,7 +112,7 @@ def watch_courses(xmu_login, course_controller, teaching_class_type, campus, key
 
         if selected == "EXIT":
             console.print("已退出查询。")
-            break
+            return False
         elif selected == "NEXT_PAGE":
             page_number += 1
             continue
@@ -128,3 +142,4 @@ def watch_courses(xmu_login, course_controller, teaching_class_type, campus, key
         # 如果用户刚才选了课程，不管是不是添加，都可以让他确认下一页
         if not questionary.confirm("是否查看下一页？", style=style).ask():
             break
+    return True
