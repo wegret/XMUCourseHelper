@@ -6,3 +6,4 @@ tmp.json
 __pycache__
 .git/
 *.bat
+/.venv

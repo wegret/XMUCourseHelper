@@ -5,31 +5,23 @@ LastEditTime: 2025-01-04 15:03:23
 Discription: file content
 """
 
-import json
 import argparse
-from utils.helpers import clear_screen, console, create_style
-from selection import select_KKDW
+from utils.helpers import console
 from login import XMULogin
 from course_controller import XMUCourseController
-import logging
 import time
-import questionary
 import random
-
 import warnings
 import urllib3
+from typing import Any, Dict
 
 warnings.simplefilter("ignore", urllib3.exceptions.InsecureRequestWarning)
-
 from watch import load_class_type_map, load_watch_list, save_watch_list, watch_courses
-
-
 import tkinter as tk
 from tkinter import messagebox
-import threading
 
 
-def alert_user(course_name, number_of_selected, class_capacity):
+def alert_user(course_name: str, number_of_selected: int, class_capacity: int):
     """
     播放提示音并显示提示框
     """
@@ -48,7 +40,11 @@ def alert_user(course_name, number_of_selected, class_capacity):
 
 
 def listen_loop(
-    xmu, course_controller, interval, autoadd_enabled=True, random_adjustment=False
+    xmu: XMULogin,
+    course_controller: XMUCourseController,
+    interval: int,
+    autoadd_enabled: bool = True,
+    random_adjustment: bool = False,
 ):
     """
     持续监听 watch_list.json 中的课程，定时查询更新 secretVal、选课人数、容量并判断是否有空位
@@ -71,7 +67,7 @@ def listen_loop(
                     )
                     continue
 
-                req = {
+                req: Dict[str, Any] = {
                     "teachingClassType": teaching_class_type,
                     "pageNumber": 1,
                     "pageSize": 10,
@@ -153,7 +149,7 @@ def listen_loop(
 import ctypes
 
 
-def alert_error(msg):
+def alert_error(msg: str):
     MessageBox = ctypes.windll.user32.MessageBoxW
     MessageBox(None, msg, "Error", 0)
 

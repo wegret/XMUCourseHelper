@@ -5,15 +5,19 @@ LastEditTime: 2025-01-03 22:10:15
 Discription: file content
 """
 
-import requests
 import logging
-from typing import Dict
-import time
-import urllib.parse
+from typing import Dict, Any, Optional
+import requests
 
 
 class XMUCourseController:
-    def __init__(self, session, token, batch_id, cookies):
+    def __init__(
+        self,
+        session: requests.Session,
+        token: str,
+        batch_id: str,
+        cookies: dict[str, str],
+    ):
         self.session = session
         self.token = token
         self.batch_id = batch_id
@@ -38,7 +42,7 @@ class XMUCourseController:
             }
         )
 
-    def search_courses(self, params: Dict) -> Dict:
+    def search_courses(self, params: Dict[Any, Any]) -> Optional[Dict[Any, Any]]:
         """
         搜索课程
 

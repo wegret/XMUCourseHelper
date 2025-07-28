@@ -10,21 +10,18 @@ import logging
 import yaml
 from urllib.parse import urlencode
 from utils.aes_util import AesUtil
-from utils.helpers import console
-from utils.config_handler import load_last_selection
 import time
-from Crypto.Cipher import AES
 from captcha import verify as captcha_verify
-from utils.helpers import clear_screen
+from typing import Any, Optional, Dict
 
 
 class XMULogin:
-    def __init__(self, config_path="config/user.yaml"):
+    def __init__(self, config_path: str = "config/user.yaml"):
         self.session = requests.Session()
-        self.token = None
+        self.token: str = ""
         self.aesutil = AesUtil("MWMqg2tPcDkxcm11")  # 固定密钥
-        self.batch_id = None
-        self.cookies = None
+        self.batch_id: str = ""
+        self.cookies: Dict[str, str] = {}
 
         try:
             self.session.get(
@@ -45,7 +42,7 @@ class XMULogin:
         )
         self.load_config(config_path)
 
-    def load_config(self, config_path):
+    def load_config(self, config_path: str):
         """加载配置文件"""
         try:
             with open(config_path, "r", encoding="utf-8") as f:
@@ -60,7 +57,9 @@ class XMULogin:
             logging.error(f"加载配置文件失败: {str(e)}")
             raise
 
-    def request_with_retry(self, method, url, max_retries=3, **kwargs):
+    def request_with_retry(
+        self, method: str, url: str, max_retries: int = 3, **kwargs: Any
+    ) -> requests.Response:
         """带重试机制的请求方法"""
         for i in range(max_retries):
             try:
@@ -72,8 +71,9 @@ class XMULogin:
                 if i == max_retries - 1:
                     raise e
                 time.sleep(1 * (i + 1))
+        raise
 
-    def get_captcha(self):
+    def get_captcha(self) -> Optional[Dict[str, Any]]:
         """获取验证码"""
         url = "https://xk.xmu.edu.cn/xsxkxmu/auth/captcha"
         logging.info("正在请求验证码")
@@ -145,7 +145,7 @@ class XMULogin:
 
         # 准备登录数据
         login_url = "https://xk.xmu.edu.cn/xsxkxmu/auth/login"
-        login_data = {
+        login_data: Dict[str, Any] = {
             "loginname": self.username,
             "password": encrypted_password,
             "captcha": captcha_code,
@@ -176,7 +176,7 @@ class XMULogin:
                     logging.info(f"获取到 batchId: {self.batch_id}")
                 else:
                     logging.error("未获取到 electiveBatchList 中的 batchId")
-                    self.batch_id = None
+                    self.batch_id = ""
 
                 return True
             else:
