@@ -10,8 +10,8 @@ import os
 from utils.helpers import console, create_style
 import questionary
 from typing import List, Any, Optional, Dict
-from .login import XMULogin
-from .course_controller import XMUCourseController
+from login import XMULogin
+from course_controller import XMUCourseController
 
 
 def load_class_type_map():
