@@ -1,81 +1,151 @@
-"""
+'''
 Author: wlaten
-Date: 2024-12-31 08:25:34
-LastEditTime: 2025-01-01 18:24:30
+Date: 2025-12-27 01:44:41
+LastEditTime: 2025-12-31 18:28:53
 Discription: file content
-"""
+'''
 
 import base64
-import requests
 import time
-from typing import Any
-
-import io
+from pathlib import Path
 from PIL import Image
-import yaml
-
-with open("config/captcha.yaml", "r", encoding="utf-8") as f:
-    config = yaml.load(f, Loader=yaml.FullLoader)
-captcha_token = config["captcha_token"]
+import io
+import requests
+import re
 
 
-def verify(img_base64: str):
-    url = "http://api.jfbym.com/api/YmServer/customApi"
+def solve_captcha(image_base64: str, config: dict, input_func=None) -> str:
+    """
+    识别验证码
+    
+    Args:
+        image_base64: base64编码的图片
+        config: 配置字典
+        input_func: 自定义输入函数（用于QQ bot等场景），默认用input
+    
+    Returns:
+        (bool, str): 识别状态和结果
+    """
+    method = config.get("captcha", {}).get("type", "manual")
+    
+    if method == "manual":
+        return _solve_manual(image_base64, input_func or input)
 
-    data: dict[str, Any] = {
-        "token": captcha_token,
-        "type": 50100,
-        "image": img_base64,
-    }
-    _headers = {"Content-Type": "application/json"}
-    response = requests.request("POST", url, headers=_headers, json=data).json()
-    print(response)
-    return response["data"]["data"]
+    elif method == "api":
+        token = config["captcha"]["token"]
+        return _solve_api(image_base64, token)
+    
+    elif method == "llm":
+        return _solve_llm(
+            image_base64,
+            config["captcha"]["base_url"],
+            config["captcha"]["api_key"],
+            config["captcha"]["model"]
+        )
+
+def _solve_manual(image_base64: str, input_func) -> str:
+    """手动输入"""
+    image_data = base64.b64decode(image_base64)
+    image = Image.open(io.BytesIO(image_data))
+    
+    Path("cache").mkdir(exist_ok=True)
+    filename = f"cache/captcha_{time.strftime('%Y%m%d_%H%M%S')}.png"
+    image.save(filename)
+    
+    try:
+        image.show()
+    except:
+        pass
+    
+    print(f"验证码已保存: {filename}")
+    return True, input_func("请输入验证码: ")
 
 
-def request_with_retry(
-    method: str,
-    url: str,
-    session: requests.Session,
-    max_retries: int = 3,
-    **kwargs: Any,
-) -> requests.Response:
-    """带重试机制的请求方法"""
-    for i in range(max_retries):
-        try:
-            response = session.request(method, url, **kwargs)
-            response.raise_for_status()
-            return response
-        except requests.exceptions.RequestException as e:
-            if i == max_retries - 1:
-                raise e
-            time.sleep(1 * (i + 1))
-    raise
+def _solve_api(image_base64: str, token: str) -> str:
+    """打码平台"""
+    resp = requests.post(
+        "http://api.jfbym.com/api/YmServer/customApi",
+        json={"token": token, "type": 50100, "image": image_base64},
+        headers={"Content-Type": "application/json"}
+    ).json()
+    
+    if resp.get("code") != 10000:
+        return False, f"打码平台请求失败: {resp.get('message', '未知错误')}"
+    return True, resp["data"]["data"]
 
+
+def _process_image(image_base64: str,
+                   scale_factor: float = 3.0
+                   ) -> str:
+    """ 预处理图片 """
+    try:
+        image_data = base64.b64decode(image_base64)
+        image = Image.open(io.BytesIO(image_data))
+        
+        new_width = int(image.width * scale_factor)
+        new_height = int(image.height * scale_factor)
+        
+        resized_image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        
+        buffered = io.BytesIO()
+        
+        resized_image.save(buffered, format="PNG")
+        new_base64 = base64.b64encode(buffered.getvalue()).decode()
+        
+        return new_base64
+        
+    except Exception as e:
+        print(f"图片预处理（放大）失败: {e}，将使用原图。")
+        return image_base64
+
+def _solve_llm(image_base64: str, base_url: str, api_key: str, model: str) -> str:
+    """使用大模型识别验证码"""
+    
+    image_base64 = _process_image(image_base64)
+    
+    resp = requests.post(
+        base_url,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "model": model,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "图形能力测试。请你扮演人类，识别图中验证码。如果是算式，就给出结果。在回答最末尾给出【】包裹的结果。例如，答案是10，就给出【10】"},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}}
+                ]
+            }]
+        },
+        timeout=30
+    )
+    
+    if not resp.ok:
+        return False, f"LLM请求失败: {resp.status_code} {resp.text}"
+    
+    try:
+        data = resp.json()
+    except Exception as e:
+        return False, f"LLM响应解析失败: {e}"
+
+    content = data["choices"][0]["message"]["content"].strip()
+    matches = re.findall(r"【([^【】]+)】", content)
+    if not matches:
+        return False, f"未能从LLM响应中提取验证码: {content}"
+    
+    return True, matches[-1]
 
 if __name__ == "__main__":
-
-    url = "https://xk.xmu.edu.cn/xsxkxmu/auth/captcha"
-    try:
-        # 创建一个会话对象
-        session = requests.Session()
-
-        response = request_with_retry("POST", url, session)
-        data = response.json()
-
-        if data["code"] == 200:
-            captcha_base64 = data["data"]["captcha"].split(",")[1]
-
-            # 测试用, 保存验证码图片
-            image_data = base64.b64decode(captcha_base64)
-            image = Image.open(io.BytesIO(image_data))
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            filename = f"captcha_{timestamp}.png"
-            image.save(f"cache/{filename}")
-            print(f"验证码图片已保存为: {filename}")
-            image.show()
-
-            verify(captcha_base64)
-
-    except Exception as e:
-        print(f"请求验证码图片失败: {e}")
+    with open("cache/captcha_20251227_002336.png", "rb") as f:
+        image_data = f.read()
+    
+    image_base64 = base64.b64encode(image_data).decode()
+    
+    with open("config/user.yaml", "r", encoding="utf-8") as f:
+        import yaml
+        config = yaml.safe_load(f)
+    
+    state, code = solve_captcha(image_base64, config)
+    print(f"识别结果: {code}")
