@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2025-12-27 01:44:41
-LastEditTime: 2025-12-31 18:28:53
+LastEditTime: 2026-01-01 01:03:21
 Discription: file content
 '''
 
@@ -26,21 +26,21 @@ def solve_captcha(image_base64: str, config: dict, input_func=None) -> str:
     Returns:
         (bool, str): 识别状态和结果
     """
-    method = config.get("captcha", {}).get("type", "manual")
+    method = config.get("type", "manual")
     
     if method == "manual":
         return _solve_manual(image_base64, input_func or input)
 
     elif method == "api":
-        token = config["captcha"]["token"]
+        token = config["token"]
         return _solve_api(image_base64, token)
     
     elif method == "llm":
         return _solve_llm(
             image_base64,
-            config["captcha"]["base_url"],
-            config["captcha"]["api_key"],
-            config["captcha"]["model"]
+            config["base_url"],
+            config["api_key"],
+            config["model"]
         )
 
 def _solve_manual(image_base64: str, input_func) -> str:
@@ -147,5 +147,5 @@ if __name__ == "__main__":
         import yaml
         config = yaml.safe_load(f)
     
-    state, code = solve_captcha(image_base64, config)
+    state, code = solve_captcha(image_base64, config['captcha'])
     print(f"识别结果: {code}")

@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2025-12-27 00:52:30
-LastEditTime: 2026-01-01 00:43:13
+LastEditTime: 2026-01-01 01:06:35
 Discription: file content
 '''
 import requests
@@ -24,11 +24,13 @@ class XMUClient:
     def __init__(self,
                  username: str,
                  password: str,
-                 campus: str):
+                 campus: str,
+                 config_captcha: dict):
         self.username = username
         self.password = password
         self.campus = campus
         self.aes = AesUtil("MWMqg2tPcDkxcm11")
+        self.config_captcha = config_captcha
         
         self.session = self._create_session()
         self.token = None
@@ -86,6 +88,40 @@ class XMUClient:
         image_base64 = data["data"]["captcha"].split(",")[1]
         
         return uuid, image_base64
+    
+    def login(self) -> bool:
+        uuid, image_base64 = self._get_captcha()
+        
+        success, captcha_code = solve_captcha(image_base64, self.config_captcha)
+        if not success:
+            raise Exception(f"验证码识别失败: {captcha_code}")
+        logging.info(f"验证码识别结果: {captcha_code}")
+        
+        encrypted_password = self.aes.encrypt(self.password)
+        
+        payload = {
+            "loginname": self.username,
+            "password": encrypted_password,
+            "captcha": str(captcha_code),
+            "uuid": uuid
+        }
+        
+        resp = self._request("POST", "/auth/login", data=payload)
+        data = resp.json()
+        # print(f"登录响应: {data}")
+        
+        if data.get("code") != 200:
+            raise Exception(f"登录失败: {data.get('message', '未知错误')}")
+        
+        self.token = data["data"]["token"]
+        self.session.headers["Authorization"] = self.token
+        
+        student = data["data"].get("student", {})
+        batch_list = student.get("electiveBatchList", [])
+        self.batch_id = batch_list[0]["code"] if batch_list else None
+        
+        logging.info(f"登录成功！用户: {student.get('XM', '未知')}, BatchID: {self.batch_id}")
+        return True 
 
     @property
     def is_logged_in(self) -> bool:
@@ -101,7 +137,8 @@ if __name__ == "__main__":
     client = XMUClient(
         username=config["username"],
         password=config["password"],
-        campus=config.get("campus", "6")
+        campus=config.get("campus", "6"),
+        config_captcha=config["captcha"]
     )
     
     try:
@@ -110,18 +147,9 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"请求失败: {e}")
     
-    # 测试获取验证码
-    uuid, image_base64 = client._get_captcha()
-    print(f"UUID: {uuid}")
-    print(f"图片Base64长度: {len(image_base64)}")
-    
-    # 可选：保存图片看看
-    import base64
-    from PIL import Image
-    import io
-    
-    img_data = base64.b64decode(image_base64)
-    img = Image.open(io.BytesIO(img_data))
-    img.save("cache/test_captcha.png")
-    img.show()
-    print("验证码图片已保存到 cache/test_captcha.png")
+    if client.login():
+        print("【登录成功】")
+        print(f"   Token: {client.token[:20]}...")
+        print(f"   BatchID: {client.batch_id}")
+    else:
+        print("【登录失败】")
