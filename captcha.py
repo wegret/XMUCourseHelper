@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2025-12-27 01:44:41
-LastEditTime: 2026-01-01 01:03:21
+LastEditTime: 2026-01-03 22:29:51
 Discription: file content
 '''
 
@@ -11,6 +11,7 @@ from pathlib import Path
 from PIL import Image
 import io
 import requests
+from requests.exceptions import ReadTimeout
 import re
 
 
@@ -103,24 +104,29 @@ def _solve_llm(image_base64: str, base_url: str, api_key: str, model: str) -> st
     
     image_base64 = _process_image(image_base64)
     
-    resp = requests.post(
-        base_url,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        },
-        json={
-            "model": model,
-            "messages": [{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "图形能力测试。请你扮演人类，识别图中验证码。如果是算式，就给出结果。在回答最末尾给出【】包裹的结果。例如，答案是10，就给出【10】"},
-                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}}
-                ]
-            }]
-        },
-        timeout=30
-    )
+    try:
+        resp = requests.post(
+            base_url,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": model,
+                "messages": [{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "图形能力测试。请你扮演人类，识别图中验证码。如果是算式，就给出结果。在回答最末尾给出【】包裹的结果。例如，答案是10，就给出【10】"},
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}}
+                    ]
+                }]
+            },
+            timeout=(5, 30)
+        )
+    except ReadTimeout:
+        return False, "LLM 接口超时"
+    except requests.RequestException as e:
+        return False, f"LLM 请求错误: {e}"
     
     if not resp.ok:
         return False, f"LLM请求失败: {resp.status_code} {resp.text}"
