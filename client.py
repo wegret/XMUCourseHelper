@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2025-12-27 00:52:30
-LastEditTime: 2026-01-01 01:06:35
+LastEditTime: 2026-01-02 08:50:49
 Discription: file content
 '''
 import requests
@@ -111,6 +111,7 @@ class XMUClient:
         # print(f"登录响应: {data}")
         
         if data.get("code") != 200:
+            print(data)
             raise Exception(f"登录失败: {data.get('message', '未知错误')}")
         
         self.token = data["data"]["token"]
@@ -126,6 +127,61 @@ class XMUClient:
     @property
     def is_logged_in(self) -> bool:
         return self.token is not None and self.batch_id is not None
+    
+    def search_courses(self, 
+                   teaching_class_type: str,
+                   keyword: Optional[str] = None,
+                   **extra_params) -> Optional[list]:
+        """
+        搜索课程（会返回所有课程）
+        
+        Args:
+            teaching_class_type: 课程类型（如 "ALLKC", "BXKC" 等， 见 info/clazzType.json ）
+            keyword: 搜索关键词
+            **extra_params: 其他参数（如 KKDW 等）
+        
+        Returns:
+            Optional[list]: 课程列表或None
+        """
+        
+        payload = {
+            "teachingClassType": teaching_class_type,
+            "pageNumber": 1,    
+            "pageSize": 10,
+            "orderBy": "",
+            "campus": self.campus
+        }
+        if keyword:
+            payload["KEY"] = keyword
+        
+        payload.update(extra_params)
+        
+        courses = []
+        
+        error_cnt = 0
+        while True:
+            try:
+                resp = self._request("POST", "/elective/xmu/clazz/list", json=payload)
+                data = resp.json()
+                
+                if data.get("code") != 200:
+                    logging.error(f"搜索课程失败: {data.get('message', '未知错误')}")
+                    return None
+                
+                courses.extend(data["data"].get("rows", []))
+                
+                if len(courses) >= data["data"].get("total", 0):
+                    return courses
+                
+                payload["pageNumber"] += 1
+                error_cnt = 0
+                
+            except Exception as e:
+                logging.error(f"搜索课程异常: {e}")
+                error_cnt += 1            
+                if error_cnt >= 3:
+                    return None
+            time.sleep(0.2)
     
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
@@ -153,3 +209,12 @@ if __name__ == "__main__":
         print(f"   BatchID: {client.batch_id}")
     else:
         print("【登录失败】")
+        exit(0)
+    
+        
+    courses = client.search_courses("ALLKC", keyword="羽毛球")
+    
+    print(f"搜索到 {len(courses)} 门课程")
+    with open("cache/courses.json", "w", encoding="utf-8") as f:
+        import json
+        json.dump(courses, f, ensure_ascii=False, indent=2)
