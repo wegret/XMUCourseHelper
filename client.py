@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2025-12-27 00:52:30
-LastEditTime: 2026-01-04 16:01:41
+LastEditTime: 2026-01-04 16:59:51
 Discription: file content
 '''
 import requests
@@ -203,14 +203,19 @@ class XMUClient:
         error_cnt = 0
         while True:
             try:
-                resp = self._request("POST", "/elective/xmu/clazz/list", json=payload)
+                resp = self._request("POST", "/elective/xmu/clazz/list", json=payload,
+                                     timeout=5)
                 data = resp.json()
                 
                 if data.get("code") != 200:
                     logging.error(f"搜索课程失败: {data.get('message', '未知错误')}")
                     return None
                 
-                courses.extend(data["data"].get("rows", []))
+                # 筛选campus一致的课程（只能选同校区的，其他也选不了）
+                courses_new = data["data"].get("rows", [])
+                courses_new = [c for c in courses_new if str(c.get("campus")) == str(self.campus)]
+                
+                courses.extend(courses_new)
                 
                 if len(courses) >= data["data"].get("total", 0):
                     return courses
@@ -279,9 +284,11 @@ class XMUClient:
                                 "teachPlaceHide": clazz.get("teachingPlaceHide", "未知"),
                                 "clazzType": t
                             }
-                    if info == {}:
-                        print(f"未找到课程 {KCH} 的教学班 {JXBID}？？？？")
                     break
+                
+                if info == {}:
+                    logging.info("这门课你无法选择！")
+                    return False, "这门课你无法选择！是给你选的吗你就选？"
                 
                 time.sleep(0.2)
             
