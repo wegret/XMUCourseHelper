@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2025-12-27 00:52:30
-LastEditTime: 2026-01-04 01:24:59
+LastEditTime: 2026-01-04 16:01:41
 Discription: file content
 '''
 import requests
@@ -11,6 +11,7 @@ import warnings
 import urllib3
 import time, os, json
 from typing import Optional, Dict, Any, Tuple
+import urllib.parse
 
 from captcha import solve_captcha
 
@@ -26,13 +27,15 @@ class XMUClient:
                  password: str,
                  campus: str,
                  config_captcha: dict,
-                 add_auto: bool = False):
+                 auto_add_enable: bool = False,
+                 check_interval: int = 60):
         self.username = username
         self.password = password
         self.campus = campus
         self.aes = AesUtil("MWMqg2tPcDkxcm11")
         self.config_captcha = config_captcha
-        self.add_auto = add_auto
+        self.auto_add_enable = auto_add_enable
+        self.check_interval = check_interval
         
         self.session = self._create_session()
         self.token = None
@@ -54,7 +57,7 @@ class XMUClient:
         try:
             session.get(f"{self.BASE_URL}/profile/index.html", verify=False, timeout=10)
         except Exception as e:
-            logging.warning(f"初始访问首页失败: {e}")
+            logging.warning(f"初始访问首页失败: {e}")   # todo 这是网络波动
             
         return session
     
@@ -62,6 +65,9 @@ class XMUClient:
                  method: str,
                  endpoint: str, # 相对路径，如 "/auth/login"
                  max_retries: int = 3,
+                 retry_forever: bool = False,
+                 backoff_base: float = 2.0,
+                 backoff_cap: int = 60,
                  **kwargs) -> requests.Response:
         
         url = f"{self.BASE_URL}{endpoint}"
@@ -70,20 +76,26 @@ class XMUClient:
         kwargs.setdefault("verify", False)
         
         last_exception = None
-        for attempt in range(max_retries):
+        attempt = 0
+        # retry_forever 会在服务不可用时持续重试，防止程序直接崩溃
+        while True:
+            attempt += 1
             try:
                 response = self.session.request(method, url, **kwargs)
                 response.raise_for_status()
                 return response
             except requests.RequestException as e:
                 last_exception = e
-                logging.warning(f"请求失败 (尝试 {attempt + 1}/{max_retries}): {e}")
-                if attempt < max_retries - 1:
-                    time.sleep(1 * (attempt + 1))  # 递增等待
-        raise last_exception
+                attempt_info = f"{attempt}/{max_retries}" if not retry_forever else f"{attempt}/∞"
+                logging.warning(f"请求失败 (尝试 {attempt_info}): {e}")
+                if not retry_forever and attempt >= max_retries:
+                    raise last_exception
+                sleep_seconds = min(backoff_cap, backoff_base * attempt)
+                logging.info(f"等待 {sleep_seconds:.0f} 秒后重试...")
+                time.sleep(sleep_seconds)
 
     def _get_captcha(self) -> Tuple[str, str]:
-        resp = self._request("POST", "/auth/captcha")
+        resp = self._request("POST", "/auth/captcha", retry_forever=True)
         data = resp.json()
         if data.get("code") != 200:
             raise Exception(f"获取验证码失败: {data.get('message', '未知错误')}")
@@ -94,39 +106,48 @@ class XMUClient:
         return uuid, image_base64
     
     def login(self) -> bool:
-        uuid, image_base64 = self._get_captcha()
-        
-        success, captcha_code = solve_captcha(image_base64, self.config_captcha)
-        if not success:
-            raise Exception(f"验证码识别失败: {captcha_code}")
-        logging.info(f"验证码识别结果: {captcha_code}")
-        
-        encrypted_password = self.aes.encrypt(self.password)
-        
-        payload = {
-            "loginname": self.username,
-            "password": encrypted_password,
-            "captcha": str(captcha_code),
-            "uuid": uuid
-        }
-        
-        resp = self._request("POST", "/auth/login", data=payload)
-        data = resp.json()
-        # print(f"登录响应: {data}")
-        
-        if data.get("code") != 200:
-            print(data)
-            raise Exception(f"登录失败: {data.get('message', '未知错误')}")
-        
-        self.token = data["data"]["token"]
-        self.session.headers["Authorization"] = self.token
-        
-        student = data["data"].get("student", {})
-        batch_list = student.get("electiveBatchList", [])
-        self.batch_id = batch_list[0]["code"] if batch_list else None
-        
-        logging.info(f"登录成功！用户: {student.get('XM', '未知')}, BatchID: {self.batch_id}")
-        return True 
+        while True:
+            uuid, image_base64 = self._get_captcha()
+            
+            success, captcha_code = solve_captcha(image_base64, self.config_captcha)
+            if not success:
+                raise Exception(f"验证码识别失败: {captcha_code}")
+            logging.info(f"验证码识别结果: {captcha_code}")
+            
+            encrypted_password = self.aes.encrypt(self.password)
+            
+            payload = {
+                "loginname": self.username,
+                "password": encrypted_password,
+                "captcha": str(captcha_code),
+                "uuid": uuid
+            }
+            
+            try:
+                resp = self._request("POST", "/auth/login", data=payload, retry_forever=True)
+                data = resp.json()
+                # print(f"登录响应: {data}")
+                
+                if data.get("code") != 200:
+                    logging.warning(f"登录失败: {data.get('msg') or data.get('message', '未知错误')}，正在重试...")
+                    time.sleep(2)
+                    continue
+                
+                self.token = data["data"]["token"]
+                self.session.headers["Authorization"] = self.token
+                self.session.cookies.set("Authorization", self.token)
+                
+                student = data["data"].get("student", {})
+                batch_list = student.get("electiveBatchList", [])
+                self.batch_id = batch_list[0]["code"] if batch_list else None
+                if self.batch_id:   # API 选课接口需要 batchId 头才能视为有效轮次
+                    self.session.headers["batchId"] = self.batch_id
+                
+                logging.info(f"登录成功！用户: {student.get('XM', '未知')}, BatchID: {self.batch_id}")
+                return True 
+            except Exception as e:
+                logging.error(f"登录请求异常: {e}，正在重试...")
+                time.sleep(2)
 
     @property
     def is_logged_in(self) -> bool:
@@ -135,7 +156,7 @@ class XMUClient:
         payload = {
             "batchId": self.batch_id
         }
-        resp = self._request("POST", "/elective/user", allow_redirects=False, data=payload)
+        resp = self._request("POST", "/elective/user", allow_redirects=False, data=payload, retry_forever=True)
         try:
             data = resp.json()
         except Exception:
@@ -219,7 +240,7 @@ class XMUClient:
                 return (int(clazz.get("numberOfSelected")), int(clazz.get("classCapacity")))
         raise Exception(f"未找到课程 {KCH} 的教学班 {JXBID}")
     
-    def add_watch(self, KCH, JXBID, info, subscriber=(-1, -1)):
+    def add_watch(self, KCH, JXBID, subscriber=(-1, -1)):
         """
         把课程加入监控列表
         Args:
@@ -227,23 +248,57 @@ class XMUClient:
             JXBID: 教学班ID
             subscriber: 订阅者标识，后续引入qq bot用，(qq号, 群号)，如果是私聊则群号为-1
         Returns:
+            bool: 是否成功
             str: 结果信息
         """
         number_of_selected, capacity = self.query_class_number(KCH, JXBID)
         if KCH not in self.watch_list:
             self.watch_list[KCH] = {}
         if JXBID not in self.watch_list[KCH]:
+            
+            info = {}
+            class_type = ["TJKC", "FANKC", "FAWKC", "TYKC", "XGKC"]
+            
+            for t in class_type:
+                courses = self.search_courses(t, keyword=str(KCH))
+                
+                if len(courses) > 0:
+                    # 这个就说明是了
+                    if "tcList" in courses[0]:
+                        classes = courses[0]["tcList"]
+                    else:
+                        classes = courses
+                    
+                    for clazz in classes:
+                        if str(clazz.get("JXBID")) == str(JXBID):
+                            # todo 这里没有检查是否可选，默认选的一定可选
+                            info = {
+                                "KCM": clazz["KCM"],
+                                "SKJS": clazz["SKJS"],
+                                "secretVal": clazz["secretVal"],
+                                "teachPlaceHide": clazz.get("teachingPlaceHide", "未知"),
+                                "clazzType": t
+                            }
+                    if info == {}:
+                        print(f"未找到课程 {KCH} 的教学班 {JXBID}？？？？")
+                    break
+                
+                time.sleep(0.2)
+            
+            if not info:
+                return False, "未找到对应课程信息，无法加入监控（可能已选中）"
             self.watch_list[KCH][JXBID] = {
                 "last_selected": number_of_selected,
                 "capacity": capacity,
                 "info": info,
-                "subscribers": []
+                "subscribers": [],
+                "had_vacancy": False  # 强制首轮检测一次空位
             }
         if subscriber not in self.watch_list[KCH][JXBID]["subscribers"]:
             self.watch_list[KCH][JXBID]["subscribers"].append(subscriber)
         else:
-            return "您已订阅该课程的监控"
-        return "已成功将课程加入监控列表"
+            return True, "您已订阅该课程的监控"
+        return True, "已成功将课程加入监控列表"
     
     def save(self, filepath = "cache/XMUClient.json"):
         """
@@ -278,44 +333,129 @@ class XMUClient:
         self.watch_list = data.get("watch_list", {})
         if self.token:  # 补回鉴权头
             self.session.headers["Authorization"] = self.token
+            self.session.cookies.set("Authorization", self.token)
+        if self.batch_id:
+            self.session.headers["batchId"] = self.batch_id
     
-    def add_course(self,
-                   clazzId,
-                   secretVal,
-                   clazzType):    # ! 这个我不确定有没有影响，总之现在是在乱尝试
-        clazzType = clazzType.strip()
+    def add_course(self, KCH, clazzId, clazzType):
         
-        attempt_type = []
-        if clazzType == "专业课程" or clazzType == "学科通修课程" or clazzType == "方案外课程" or clazzType == "任选课程":
-            attempt_type = ["TJKC", "FANKC", "FAWKC"]
-        elif clazzType == "公共基本课程":
-            attempt_type = ["TYKC", "XGKC"]
-        elif clazzType == "通识教育课程":
-            attempt_type = ["XGKC", "TYKC"]
+        print(f"尝试选课: KCH={KCH}, clazzId={clazzId}, clazzType={clazzType}")
+        courses = self.search_courses(clazzType, keyword=KCH)
+        if not courses:
+            return False, "未找到课程列表，无法选课"
+
+        classes = courses[0].get("tcList", courses)
+
+        secretVal = None
+        for clazz in classes:
+            if str(clazz.get("JXBID")) == str(clazzId):
+                secretVal = clazz.get("secretVal")
+                break
+        if not secretVal:
+            return False, "未找到对应课程信息，无法选课"
         
-        alltypes = ["TJKC", "FANKC", "FAWKC", "TYKC", "XGKC"]
-        for at in alltypes:
-            if at not in attempt_type:
-                attempt_type.append(at)
-        
-        logging.info(f"课程类型: {clazzType}")
-        for attempt_type in attempt_type:
-            try:
-                resp = self._request("POST", "/elective/clazz/add", data={
-                    "clazzType": "TJKC",
-                    "clazzId": clazzId,
-                    "secretVal": secretVal
-                })
+        headers = {
+            "Referer": f"{self.BASE_URL}/elective/grablessons?batchId={self.batch_id}"
+        }
+        try:
+            resp = self._request("POST", "/elective/clazz/add", data={
+                "clazzType": clazzType,
+                "clazzId": clazzId,
+                "secretVal": secretVal
+            }, headers=headers)
+            data = resp.json()
+            if data.get("code") == 200:
+                return True, f"【选课成功】"
+            else:
+                return False, f"选课失败: {data.get('msg', '未知错误')}"
+        except Exception as e:
+            return False, f"选课请求异常: {e}"
+    
+    def check_once(self) -> list:
+        """
+        单次检查所有监控课程，返回变化列表
+        Returns:
+            list[dict]: [{"KCH": ..., "JXBID": ..., "info": ..., "old": int, "new": int, "capacity": int, "has_vacancy": bool}, ...]
+        """
+        changes = []
+        for KCH, jxb_dict in self.watch_list.items():
+            classes = self.search_courses("ALLKC", keyword=str(KCH))
+            if not classes:
+                continue
+            for clazz in classes:
+                JXBID = str(clazz.get("JXBID"))
+                if JXBID not in jxb_dict:
+                    continue
                 
-                data = resp.json()
-                if data.get("code") == 200:
-                    return True, "选课成功"
-                logging.info(f"尝试选课类型 {attempt_type} 失败: {data.get('msg', '未知错误')}")
-                time.sleep(1)
-            except Exception as e:
-                pass
-        return False, "所有尝试均失败"
+                number_of_selected = int(clazz.get("numberOfSelected"))
+                capacity = int(clazz.get("classCapacity"))
+                watch_info = jxb_dict[JXBID]
+                last_selected = watch_info["last_selected"]
+                prev_has_vacancy = watch_info.get("had_vacancy", False)
+                has_vacancy = number_of_selected < capacity
+                
+                if number_of_selected != last_selected or (has_vacancy and not prev_has_vacancy):
+                    changes.append({
+                        "KCH": KCH,
+                        "JXBID": JXBID,
+                        "info": watch_info["info"],
+                        "old": last_selected,
+                        "new": number_of_selected,
+                        "capacity": capacity,
+                        "has_vacancy": has_vacancy,
+                        "secretVal": clazz.get("secretVal")
+                    })
+                
+                watch_info["last_selected"] = number_of_selected
+                watch_info["capacity"] = capacity
+                watch_info["info"]["secretVal"] = clazz.get("secretVal")
+                watch_info["had_vacancy"] = has_vacancy
+
+        return changes
+    
+    def start_monitoring(self, on_change=None, on_vacancy=None):
+        """
+        开始监控循环
+        Args:
+            on_change: 回调函数，签名 (change_dict) -> None，任何变化时调用
+            on_vacancy: 回调函数，签名 (change_dict, success, msg) -> None，有空位时调用
+        """
+        logging.info(f"开始监控，间隔 {self.check_interval} 秒")
+        round_num = 0
+        
+        while True:
+            round_num += 1
+            logging.info(f"[第 {round_num} 轮检查] 开始检查 {len(self.watch_list)} 门课程...")
             
+            if not self.is_logged_in:
+                logging.warning("登录已过期，尝试重新登录...")
+                self.login()
+                self.save()
+            
+            changes = self.check_once()
+            
+            if changes:
+                logging.info(f"[第 {round_num} 轮检查] 发现 {len(changes)} 个变化")
+            else:
+                logging.info(f"[第 {round_num} 轮检查] 无变化")
+            
+            for change in changes:
+                if on_change:
+                    on_change(change)
+                
+                if self.auto_add_enable and change["has_vacancy"]:
+                    logging.info(f"检测到空位，尝试自动选课: {change['info']['KCM']}")
+                    success, msg = self.add_course(
+                        KCH=change["KCH"],
+                        clazzId=change["JXBID"],
+                        clazzType=change["info"]["clazzType"]
+                    )
+                    if on_vacancy:
+                        on_vacancy(change, success, msg)
+            
+            self.save()
+            logging.info(f"[第 {round_num} 轮检查] 完成，等待 {self.check_interval} 秒...")
+            time.sleep(self.check_interval) 
     
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
@@ -329,19 +469,9 @@ if __name__ == "__main__":
         password=config["password"],
         campus=config.get("campus", "6"),
         config_captcha=config["captcha"],
-        add_auto=config.get("add_auto", False)
+        auto_add_enable=config.get("auto_add_enable", False),
+        check_interval=config.get("check_interval")
     )
-    
-        
-    # courses = client.search_courses("ALLKC", keyword="130220000051")
-    
-    # print(f"搜索到 {len(courses)} 门课程")
-    # with open("cache/courses.json", "w", encoding="utf-8") as f:
-    #     import json
-    #     json.dump(courses, f, ensure_ascii=False, indent=2)
-    
-    # selected, capacity = client.query_class_number("130220000051", "20252026213022000005104")
-    # print(f"已选人数: {selected}, 总名额: {capacity}")
     
     while True:
         print("正在加载客户端状态...")
@@ -392,14 +522,11 @@ if __name__ == "__main__":
                     clazz = classes[idx - 1]
                     KCH = clazz["KCH"]
                     JXBID = clazz["JXBID"]
-                    result = client.add_watch(KCH, JXBID, {
-                        "KCM": clazz["KCM"],
-                        "SKJS": clazz["SKJS"],
-                        "teachingPlaceHide": clazz["teachingPlaceHide"],
-                        "secretVal": clazz["secretVal"],
-                        "KCLB": clazz["KCLB"]
-                    })
-                    print(f"添加监控课程 {clazz['KCM']}（{KCH} - {JXBID}）: {result}")
+                    success, result = client.add_watch(KCH, JXBID)
+                    if success:
+                        print(f"添加监控课程 {clazz['KCM']}（{KCH} - {JXBID}）: {result}")
+                    else:
+                        print(f"添加监控课程 {clazz['KCM']}（{KCH} - {JXBID}）失败: {result}")
                 else:
                     print(f"无效的课程编号: {idx}")
             
@@ -418,70 +545,54 @@ if __name__ == "__main__":
                     print(f"{idx}. {info['info']['KCM']}（{KCH} - {JXBID}） 已选/总名额: {info['last_selected']}/{info['capacity']}")
                     idx += 1
             
-            choice = input("是否要删除某个监控？(y/n): ").strip().lower()
-            if choice == "y":
-                sel = input("请输入要删除的监控编号（多个用逗号分隔，可以用-，例如，“1-4,5,7”）: ").strip()
-                indices = []
-                for part in sel.split(","):
-                    if "-" in part:
-                        start, end = map(int, part.split("-"))
-                        indices.extend(range(start, end + 1))
-                    else:
-                        indices.append(int(part))
-                
-                to_delete = []
-                idx = 1
-                for KCH, jxb_dict in client.watch_list.items():
-                    for JXBID in jxb_dict.keys():
-                        if idx in indices:
-                            to_delete.append((KCH, JXBID))
-                        idx += 1
-                
-                for KCH, JXBID in to_delete:
-                    del client.watch_list[KCH][JXBID]
-                    if not client.watch_list[KCH]:
-                        del client.watch_list[KCH]
-                    print(f"已删除监控课程 {KCH} - {JXBID}")
-                
-                client.save()
-                print("已保存监控列表到缓存文件")
+            sel = input("请输入要删除的监控编号（多个用逗号分隔，可以用-，例如 1-4,5,7；直接回车跳过）: ").strip()
+            if sel:
+                try:
+                    indices = []
+                    for part in sel.split(","):
+                        if "-" in part:
+                            start, end = map(int, part.split("-"))
+                            indices.extend(range(start, end + 1))
+                        else:
+                            indices.append(int(part))
+                    
+                    to_delete = []
+                    idx = 1
+                    for KCH, jxb_dict in client.watch_list.items():
+                        for JXBID in jxb_dict.keys():
+                            if idx in indices:
+                                to_delete.append((KCH, JXBID))
+                            idx += 1
+                    
+                    for KCH, JXBID in to_delete:
+                        course_name = client.watch_list[KCH][JXBID]['info']['KCM']
+                        del client.watch_list[KCH][JXBID]
+                        if not client.watch_list[KCH]:
+                            del client.watch_list[KCH]
+                        print(f"已删除监控课程: {course_name} ({KCH} - {JXBID})")
+                    
+                    client.save()
+                    print("已保存监控列表到缓存文件")
+                except ValueError:
+                    print("输入格式错误，请输入有效的数字编号")
             
         elif choice == "3":
-            print("开始循环监控课程名额变化，按 Ctrl+C 停止")
+            print(f"开始循环监控，间隔 {client.check_interval} 秒，按 Ctrl+C 停止")
+            
+            def on_change(c):
+                direction = "减少" if c["new"] < c["old"] else "增加"
+                print(f"课程 {c['info']['KCM']}（{c['KCH']}）选课人数{direction}！{c['old']} -> {c['new']}/{c['capacity']}")
+            
+            def on_vacancy(c, success, msg):
+                if success:
+                    print(f"【自动选课成功！】 {c['info']['KCM']}")
+                else:
+                    print(f"【自动选课失败！】{c['info']['KCM']}，原因: {msg}")
+            
             try:
-                while True:
-                    for KCH, jxb_dict in client.watch_list.items():
-                        classes = client.search_courses("ALLKC", keyword=str(KCH))
-                        for clazz in classes:
-                            JXBID = str(clazz.get("JXBID"))
-                            if JXBID in jxb_dict:
-                                number_of_selected = int(clazz.get("numberOfSelected"))
-                                capacity = int(clazz.get("classCapacity"))
-                                watch_info = jxb_dict[JXBID]
-                                last_selected = watch_info["last_selected"]
-                                
-                                if number_of_selected < last_selected:
-                                    print(f"课程 {watch_info['info']['KCM']}（{KCH} - {JXBID}）名额减少！已选人数: {number_of_selected} (之前: {last_selected})")
-                                elif number_of_selected > last_selected:
-                                    print(f"课程 {watch_info['info']['KCM']}（{KCH} - {JXBID}）名额增加！已选人数: {number_of_selected} (之前: {last_selected})")
-                                
-                                watch_info["last_selected"] = number_of_selected
-                                watch_info["capacity"] = capacity
-                                
-                                if client.add_auto and number_of_selected < capacity:
-                                    success, msg = client.add_course(
-                                        clazzId=JXBID,
-                                        secretVal=watch_info["info"]["secretVal"],
-                                        clazzType=watch_info["info"]["KCLB"]
-                                    )
-                                    if success:
-                                        print(f"自动选课成功！课程 {watch_info['info']['KCM']}（{KCH} - {JXBID}）")
-                                    else:
-                                        print(f"自动选课失败！课程 {watch_info['info']['KCM']}（{KCH} - {JXBID}）原因: {msg}")
-                        
-                    time.sleep(30)  # 每30秒检查一次
+                client.start_monitoring(on_change=on_change, on_vacancy=on_vacancy)
             except KeyboardInterrupt:
-                print("已停止课程监控循环")
+                print("已停止监控")
                 
         else:
             print("无效的操作编号，请重试")
