@@ -76,3 +76,5 @@ python client.py
 - [ ] 测试更多模型
 
 - [ ] 增加github actions部署支持
+
+- [ ] 增加GUI。
