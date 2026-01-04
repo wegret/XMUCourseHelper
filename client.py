@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2025-12-27 00:52:30
-LastEditTime: 2026-01-04 00:31:42
+LastEditTime: 2026-01-04 01:24:59
 Discription: file content
 '''
 import requests
@@ -25,12 +25,14 @@ class XMUClient:
                  username: str,
                  password: str,
                  campus: str,
-                 config_captcha: dict):
+                 config_captcha: dict,
+                 add_auto: bool = False):
         self.username = username
         self.password = password
         self.campus = campus
         self.aes = AesUtil("MWMqg2tPcDkxcm11")
         self.config_captcha = config_captcha
+        self.add_auto = add_auto
         
         self.session = self._create_session()
         self.token = None
@@ -277,6 +279,43 @@ class XMUClient:
         if self.token:  # 补回鉴权头
             self.session.headers["Authorization"] = self.token
     
+    def add_course(self,
+                   clazzId,
+                   secretVal,
+                   clazzType):    # ! 这个我不确定有没有影响，总之现在是在乱尝试
+        clazzType = clazzType.strip()
+        
+        attempt_type = []
+        if clazzType == "专业课程" or clazzType == "学科通修课程" or clazzType == "方案外课程" or clazzType == "任选课程":
+            attempt_type = ["TJKC", "FANKC", "FAWKC"]
+        elif clazzType == "公共基本课程":
+            attempt_type = ["TYKC", "XGKC"]
+        elif clazzType == "通识教育课程":
+            attempt_type = ["XGKC", "TYKC"]
+        
+        alltypes = ["TJKC", "FANKC", "FAWKC", "TYKC", "XGKC"]
+        for at in alltypes:
+            if at not in attempt_type:
+                attempt_type.append(at)
+        
+        logging.info(f"课程类型: {clazzType}")
+        for attempt_type in attempt_type:
+            try:
+                resp = self._request("POST", "/elective/clazz/add", data={
+                    "clazzType": "TJKC",
+                    "clazzId": clazzId,
+                    "secretVal": secretVal
+                })
+                
+                data = resp.json()
+                if data.get("code") == 200:
+                    return True, "选课成功"
+                logging.info(f"尝试选课类型 {attempt_type} 失败: {data.get('msg', '未知错误')}")
+                time.sleep(1)
+            except Exception as e:
+                pass
+        return False, "所有尝试均失败"
+            
     
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
@@ -289,7 +328,8 @@ if __name__ == "__main__":
         username=config["username"],
         password=config["password"],
         campus=config.get("campus", "6"),
-        config_captcha=config["captcha"]
+        config_captcha=config["captcha"],
+        add_auto=config.get("add_auto", False)
     )
     
         
@@ -304,8 +344,10 @@ if __name__ == "__main__":
     # print(f"已选人数: {selected}, 总名额: {capacity}")
     
     while True:
+        print("正在加载客户端状态...")
         client.load()
         if client.is_logged_in == False:
+            print("未登录或登录过期，正在登录...")
             if client.login():
                 print("【登录成功】")
                 print(f"   Token: {client.token[:20]}...")
@@ -353,7 +395,9 @@ if __name__ == "__main__":
                     result = client.add_watch(KCH, JXBID, {
                         "KCM": clazz["KCM"],
                         "SKJS": clazz["SKJS"],
-                        "teachingPlaceHide": clazz["teachingPlaceHide"]
+                        "teachingPlaceHide": clazz["teachingPlaceHide"],
+                        "secretVal": clazz["secretVal"],
+                        "KCLB": clazz["KCLB"]
                     })
                     print(f"添加监控课程 {clazz['KCM']}（{KCH} - {JXBID}）: {result}")
                 else:
@@ -407,18 +451,34 @@ if __name__ == "__main__":
             try:
                 while True:
                     for KCH, jxb_dict in client.watch_list.items():
-                        for JXBID, info in jxb_dict.items():
-                            try:
-                                selected, capacity = client.query_class_number(KCH, JXBID)
-                                if selected != info["last_selected"]:
-                                    print(f"课程 {info['info']['KCM']}（{KCH} - {JXBID}）名额变化: {info['last_selected']} -> {selected} / {capacity}")
-                                    info["last_selected"] = selected
-                                    info["capacity"] = capacity
-                                    client.save()
-                                else:
-                                    print(f"课程 {info['info']['KCM']}（{KCH} - {JXBID}）名额无变化: {selected} / {capacity}")
-                            except Exception as e:
-                                print(f"查询课程 {KCH} - {JXBID} 名额失败: {e}")
+                        classes = client.search_courses("ALLKC", keyword=str(KCH))
+                        for clazz in classes:
+                            JXBID = str(clazz.get("JXBID"))
+                            if JXBID in jxb_dict:
+                                number_of_selected = int(clazz.get("numberOfSelected"))
+                                capacity = int(clazz.get("classCapacity"))
+                                watch_info = jxb_dict[JXBID]
+                                last_selected = watch_info["last_selected"]
+                                
+                                if number_of_selected < last_selected:
+                                    print(f"课程 {watch_info['info']['KCM']}（{KCH} - {JXBID}）名额减少！已选人数: {number_of_selected} (之前: {last_selected})")
+                                elif number_of_selected > last_selected:
+                                    print(f"课程 {watch_info['info']['KCM']}（{KCH} - {JXBID}）名额增加！已选人数: {number_of_selected} (之前: {last_selected})")
+                                
+                                watch_info["last_selected"] = number_of_selected
+                                watch_info["capacity"] = capacity
+                                
+                                if client.add_auto and number_of_selected < capacity:
+                                    success, msg = client.add_course(
+                                        clazzId=JXBID,
+                                        secretVal=watch_info["info"]["secretVal"],
+                                        clazzType=watch_info["info"]["KCLB"]
+                                    )
+                                    if success:
+                                        print(f"自动选课成功！课程 {watch_info['info']['KCM']}（{KCH} - {JXBID}）")
+                                    else:
+                                        print(f"自动选课失败！课程 {watch_info['info']['KCM']}（{KCH} - {JXBID}）原因: {msg}")
+                        
                     time.sleep(30)  # 每30秒检查一次
             except KeyboardInterrupt:
                 print("已停止课程监控循环")
