@@ -204,6 +204,8 @@ class XMULogin:
                     on_message_callback=callback,
                 )
 
+                self.websocket_client.connect()
+
                 return True
             else:
                 logging.error(f"登录失败: {result['msg']}")
