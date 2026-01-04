@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Author: wlaten
 Date: 2025-01-01 18:06:37
@@ -5,6 +7,8 @@ LastEditTime: 2025-01-04 13:34:30
 Discription: file content
 """
 
+import websocket
+import threading
 import requests
 import logging
 import yaml
@@ -12,7 +16,9 @@ from urllib.parse import urlencode
 from utils.aes_util import AesUtil
 import time
 from captcha import verify as captcha_verify
-from typing import Any, Optional, Dict
+import json
+from typing import Any, Optional, Dict, Callable
+from watch import load_watch_list
 
 
 class XMULogin:
@@ -22,6 +28,7 @@ class XMULogin:
         self.aesutil = AesUtil("MWMqg2tPcDkxcm11")  # 固定密钥
         self.batch_id: str = ""
         self.cookies: Dict[str, str] = {}
+        self.watch_list = load_watch_list()
 
         try:
             self.session.get(
@@ -178,6 +185,24 @@ class XMULogin:
                     logging.error("未获取到 electiveBatchList 中的 batchId")
                     self.batch_id = ""
 
+                def callback(msg: dict[str, Any]) -> None:
+                    logging.info(f"[WS消息] {msg}")
+                    if msg.get("code") == 200:
+                        clazz_id = msg.get("data", {}).get("clazzId", "")
+                        for course in self.watch_list[:]:
+                            if course["JXBID"] == clazz_id:
+                                logging.info(
+                                    f"选课成功: {course['KCM']} ({course['JXBID']})"
+                                )
+                                self.watch_list.remove(course)
+
+                self.websocket_client = XMUWebSocketClient(
+                    url=f"wss://xk.xmu.edu.cn/xsxkxmu/websocket/{self.username}",
+                    cookie="; ".join([f"{k}={v}" for k, v in self.cookies.items()]),
+                    heartbeat_interval=10,
+                    on_message_callback=callback,
+                )
+
                 return True
             else:
                 logging.error(f"登录失败: {result['msg']}")
@@ -186,3 +211,95 @@ class XMULogin:
         except Exception as e:
             logging.error(f"登录过程出错: {str(e)}")
             return False
+
+
+class XMUWebSocketClient:
+    def __init__(
+        self,
+        url: str,
+        cookie: str,
+        heartbeat_interval: int = 30,
+        on_message_callback: Optional[Callable[[dict[str, Any]], None]] = None,
+    ) -> None:
+        """
+        :param url: WebSocket 目标地址
+        :param cookie: 完整的 Cookie 字符串
+        :param heartbeat_interval: 自定义心跳间隔（秒）
+        :param on_message_callback: 业务消息回调
+        """
+        self.url: str = url
+        self.cookie: str = cookie
+        self.heartbeat_interval: int = heartbeat_interval
+        self.on_message_callback: Optional[Callable[[Any], None]] = on_message_callback
+
+        self.ws: Optional[websocket.WebSocketApp] = None
+        self.is_running: bool = False
+        self._heartbeat_thread: Optional[threading.Thread] = None
+
+    def _get_headers(self) -> list[str]:
+        return [
+            "Origin: https://xk.xmu.edu.cn",
+            f"Cookie: {self.cookie}",
+            "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+        ]
+
+    def _on_open(self, ws: websocket.WebSocketApp) -> None:
+        print(f"[WS] 连接已建立")
+        self.is_running = True
+        # 开启自定义心跳线程
+        self._heartbeat_thread = threading.Thread(
+            target=self._send_custom_heartbeat, daemon=True
+        )
+        self._heartbeat_thread.start()
+
+    def _on_message(self, ws: websocket.WebSocketApp, message: Any) -> None:
+        try:
+            # 解析 JSON 响应
+            data = json.loads(message)
+            # 识别并拦截心跳返回包
+            if data.get("data") == "heart" and data.get("code") == 200:
+                # print("[WS] 心跳同步成功: pong") # 调试用
+                return
+        except (json.JSONDecodeError, TypeError):
+            # 如果不是 JSON，按原始数据处理
+            data = message
+
+        # 传递给业务回调
+        if self.on_message_callback:
+            self.on_message_callback(data)
+
+    def _send_custom_heartbeat(self) -> None:
+        """自定义心跳线程逻辑"""
+        print(f"[WS] 自定义心跳线程启动 (间隔: {self.heartbeat_interval}s)")
+        while self.is_running:
+            if self.ws and self.ws.sock and self.ws.sock.connected:
+                try:
+                    # 发送自定义心跳字符串
+                    self.ws.send("hi")
+                    # print("[WS] 发送心跳: hi") # 调试用
+                except Exception as e:
+                    print(f"[WS] 心跳发送失败: {e}")
+            time.sleep(self.heartbeat_interval)
+
+    def _on_error(self, ws: websocket.WebSocketApp, error: Exception) -> None:
+        print(f"[WS] 错误: {error}")
+
+    def _on_close(self, ws: websocket.WebSocketApp, status: int, msg: str) -> None:
+        print(f"[WS] 连接关闭: {status} - {msg}")
+        self.is_running = False
+
+    def connect(self) -> None:
+        """启动客户端"""
+        self.ws = websocket.WebSocketApp(
+            self.url,
+            header=self._get_headers(),  # type:ignore
+            on_open=self._on_open,
+            on_message=self._on_message,
+            on_error=self._on_error,
+            on_close=self._on_close,
+        )
+
+        # 运行 WebSocket 的 IO 循环
+        t = threading.Thread(target=self.ws.run_forever)  # type:ignore
+        t.daemon = True
+        t.start()

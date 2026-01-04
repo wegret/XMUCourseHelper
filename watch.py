@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Author: wlaten
 Date: 2025-01-03 13:28:48
@@ -10,7 +12,10 @@ import os
 from utils.helpers import console, create_style
 import questionary
 from typing import List, Any, Optional, Dict
-from login import XMULogin
+import typing
+
+if typing.TYPE_CHECKING:
+    from login import XMULogin
 from course_controller import XMUCourseController
 
 
