@@ -19,6 +19,7 @@ from captcha import verify as captcha_verify
 import json
 from typing import Any, Optional, Dict, Callable
 from watch import load_watch_list
+from utils.helpers import console
 
 
 class XMULogin:
@@ -244,7 +245,7 @@ class XMUWebSocketClient:
         ]
 
     def _on_open(self, ws: websocket.WebSocketApp) -> None:
-        print(f"[WS] 连接已建立")
+        console.print(f"[green][WS] 连接已建立[/green]")
         self.is_running = True
         # 开启自定义心跳线程
         self._heartbeat_thread = threading.Thread(
@@ -258,7 +259,7 @@ class XMUWebSocketClient:
             data = json.loads(message)
             # 识别并拦截心跳返回包
             if data.get("data") == "heart" and data.get("code") == 200:
-                # print("[WS] 心跳同步成功: pong") # 调试用
+                console.print("[green][WS] 心跳同步成功: pong[/green]")  # 调试用
                 return
         except (json.JSONDecodeError, TypeError):
             # 如果不是 JSON，按原始数据处理
@@ -270,22 +271,24 @@ class XMUWebSocketClient:
 
     def _send_custom_heartbeat(self) -> None:
         """自定义心跳线程逻辑"""
-        print(f"[WS] 自定义心跳线程启动 (间隔: {self.heartbeat_interval}s)")
+        console.print(
+            f"[green][WS] 自定义心跳线程启动 (间隔: {self.heartbeat_interval}s)[/green]"
+        )
         while self.is_running:
             if self.ws and self.ws.sock and self.ws.sock.connected:
                 try:
                     # 发送自定义心跳字符串
                     self.ws.send("hi")
-                    # print("[WS] 发送心跳: hi") # 调试用
+                    console.print("[green][WS] 发送心跳: hi[/green]")  # 调试用
                 except Exception as e:
-                    print(f"[WS] 心跳发送失败: {e}")
+                    console.print(f"[red][WS] 心跳发送失败: {e}[/red]")
             time.sleep(self.heartbeat_interval)
 
     def _on_error(self, ws: websocket.WebSocketApp, error: Exception) -> None:
-        print(f"[WS] 错误: {error}")
+        console.print(f"[red][WS] 错误: {error}[/red]")
 
     def _on_close(self, ws: websocket.WebSocketApp, status: int, msg: str) -> None:
-        print(f"[WS] 连接关闭: {status} - {msg}")
+        console.print(f"[red][WS] 连接关闭: {status} - {msg}[/red]")
         self.is_running = False
 
     def connect(self) -> None:
