@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2025-12-27 00:52:30
-LastEditTime: 2026-01-04 16:59:51
+LastEditTime: 2026-01-04 18:38:27
 Discription: file content
 '''
 import requests
@@ -111,7 +111,9 @@ class XMUClient:
             
             success, captcha_code = solve_captcha(image_base64, self.config_captcha)
             if not success:
-                raise Exception(f"验证码识别失败: {captcha_code}")
+                logging.warning(f"验证码识别失败: {captcha_code}")
+                continue
+            
             logging.info(f"验证码识别结果: {captcha_code}")
             
             encrypted_password = self.aes.encrypt(self.password)
@@ -211,14 +213,19 @@ class XMUClient:
                     logging.error(f"搜索课程失败: {data.get('message', '未知错误')}")
                     return None
                 
-                # 筛选campus一致的课程（只能选同校区的，其他也选不了）
-                courses_new = data["data"].get("rows", [])
-                courses_new = [c for c in courses_new if str(c.get("campus")) == str(self.campus)]
-                
-                courses.extend(courses_new)
+                courses.extend(data["data"].get("rows", []))
                 
                 if len(courses) >= data["data"].get("total", 0):
-                    return courses
+                    courses_clean = []
+                    for course in courses:
+                        if "tcList" in course:
+                            for clazz in course["tcList"]:
+                                if str(clazz.get("campus")) == str(self.campus):
+                                    courses_clean.append(clazz)
+                        else:
+                            if str(course.get("campus")) == str(self.campus):
+                                courses_clean.append(course)
+                    return courses_clean
                 
                 payload["pageNumber"] += 1
                 error_cnt = 0
@@ -256,7 +263,7 @@ class XMUClient:
             bool: 是否成功
             str: 结果信息
         """
-        number_of_selected, capacity = self.query_class_number(KCH, JXBID)
+        # number_of_selected, capacity = self.query_class_number(KCH, JXBID)
         if KCH not in self.watch_list:
             self.watch_list[KCH] = {}
         if JXBID not in self.watch_list[KCH]:
@@ -265,15 +272,11 @@ class XMUClient:
             class_type = ["TJKC", "FANKC", "FAWKC", "TYKC", "XGKC"]
             
             for t in class_type:
-                courses = self.search_courses(t, keyword=str(KCH))
-                
-                if len(courses) > 0:
+                classes = self.search_courses(t, keyword=str(KCH))
+                # print(f"搜索课程类型 {t}，找到 {len(classes)} 门相关课程")
+                if len(classes) > 0:
                     # 这个就说明是了
-                    if "tcList" in courses[0]:
-                        classes = courses[0]["tcList"]
-                    else:
-                        classes = courses
-                    
+                
                     for clazz in classes:
                         if str(clazz.get("JXBID")) == str(JXBID):
                             # todo 这里没有检查是否可选，默认选的一定可选
@@ -284,16 +287,17 @@ class XMUClient:
                                 "teachPlaceHide": clazz.get("teachingPlaceHide", "未知"),
                                 "clazzType": t
                             }
-                    break
-                
-                if info == {}:
-                    logging.info("这门课你无法选择！")
-                    return False, "这门课你无法选择！是给你选的吗你就选？"
+                            number_of_selected, capacity = int(clazz.get("numberOfSelected")), int(clazz.get("classCapacity"))
+                    
+                    if info:
+                        break
                 
                 time.sleep(0.2)
+                
+            if info == {}:
+                logging.info("这门课你无法选择！")
+                return False, "这门课你无法选择！是给你选的吗你就选？"
             
-            if not info:
-                return False, "未找到对应课程信息，无法加入监控（可能已选中）"
             self.watch_list[KCH][JXBID] = {
                 "last_selected": number_of_selected,
                 "capacity": capacity,
@@ -301,6 +305,7 @@ class XMUClient:
                 "subscribers": [],
                 "had_vacancy": False  # 强制首轮检测一次空位
             }
+            
         if subscriber not in self.watch_list[KCH][JXBID]["subscribers"]:
             self.watch_list[KCH][JXBID]["subscribers"].append(subscriber)
         else:
@@ -347,11 +352,9 @@ class XMUClient:
     def add_course(self, KCH, clazzId, clazzType):
         
         print(f"尝试选课: KCH={KCH}, clazzId={clazzId}, clazzType={clazzType}")
-        courses = self.search_courses(clazzType, keyword=KCH)
-        if not courses:
+        classes = self.search_courses(clazzType, keyword=KCH)
+        if not classes:
             return False, "未找到课程列表，无法选课"
-
-        classes = courses[0].get("tcList", courses)
 
         secretVal = None
         for clazz in classes:
@@ -481,7 +484,7 @@ if __name__ == "__main__":
     )
     
     while True:
-        print("正在加载客户端状态...")
+        print("正在检查客户端状态...")
         client.load()
         if client.is_logged_in == False:
             print("未登录或登录过期，正在登录...")
