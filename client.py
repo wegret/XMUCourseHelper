@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2025-12-27 00:52:30
-LastEditTime: 2026-01-04 19:27:06
+LastEditTime: 2026-01-04 19:46:53
 Discription: file content
 '''
 import requests
@@ -19,6 +19,8 @@ warnings.simplefilter("ignore", urllib3.exceptions.InsecureRequestWarning)
 
 os.makedirs("cache", exist_ok=True)
 
+min_request_interval = 1.1  # 最小请求间隔，防止被封
+
 class XMUClient:
     
     BASE_URL = "https://xk.xmu.edu.cn/xsxkxmu"
@@ -29,7 +31,7 @@ class XMUClient:
                  campus: str,
                  config_captcha: dict,
                  auto_add_enable: bool = False,
-                 check_interval: int = 60):
+                 check_interval: int = 60):  
         self.username = username
         self.password = password
         self.campus = campus
@@ -44,6 +46,8 @@ class XMUClient:
         self.cookies = {}
         
         self.watch_list = {}  # KCH -> {JXBID: { last_selected: int, capacity: int, subscribers: list }}
+        
+        self.last_request_time = 0
         
     def _create_session(self) -> requests.Session:
         session = requests.Session()
@@ -75,7 +79,7 @@ class XMUClient:
                  endpoint: str, # 相对路径，如 "/auth/login"
                  max_retries: int = 3,
                  retry_forever: bool = False,
-                 backoff_base: float = 2.0,
+                 backoff_base: float = 1.0,
                  backoff_cap: int = 60,
                  **kwargs) -> requests.Response:
         
@@ -89,6 +93,13 @@ class XMUClient:
         # retry_forever 会在服务不可用时持续重试，防止程序直接崩溃
         while True:
             attempt += 1
+            
+            if time.time() - self.last_request_time < min_request_interval:
+                sleep_time = min_request_interval - (time.time() - self.last_request_time)
+                time.sleep(sleep_time)
+            
+            self.last_request_time = time.time()
+            
             try:
                 response = self.session.request(method, url, **kwargs)
                 response.raise_for_status()
@@ -148,7 +159,6 @@ class XMUClient:
                 
                 if data.get("code") != 200:
                     logging.warning(f"登录失败: {data.get('msg') or data.get('message', '未知错误')}，正在重试...")
-                    time.sleep(2)
                     error_cnt += 1
                     continue
                 
@@ -167,7 +177,6 @@ class XMUClient:
             
             except Exception as e:
                 logging.error(f"登录请求异常: {e}，正在重试...")
-                time.sleep(2)
                 error_cnt += 1
 
     @property
@@ -254,7 +263,6 @@ class XMUClient:
                 error_cnt += 1            
                 if error_cnt >= 3:
                     return None
-            time.sleep(0.2)
     
     def query_class_number(self, KCH, JXBID) -> Tuple[int, int]:
         """
@@ -310,8 +318,6 @@ class XMUClient:
                     
                     if info:
                         break
-                
-                time.sleep(0.2)
                 
             if info == {}:
                 logging.info("这门课你无法选择！")
@@ -513,7 +519,6 @@ if __name__ == "__main__":
                 print(f"   BatchID: {client.batch_id}")
             else:
                 print("【登录失败】")
-                time.sleep(2)
                 continue
             client.save()
             print("已保存登录状态到缓存文件")
