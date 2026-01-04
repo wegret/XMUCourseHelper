@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2025-12-27 00:52:30
-LastEditTime: 2026-01-04 19:46:53
+LastEditTime: 2026-01-04 20:01:20
 Discription: file content
 '''
 import requests
@@ -108,8 +108,13 @@ class XMUClient:
                 last_exception = e
                 attempt_info = f"{attempt}/{max_retries}" if not retry_forever else f"{attempt}/∞"
                 logging.warning(f"请求失败 (尝试 {attempt_info}): {e}")
-                if not retry_forever and attempt >= max_retries:
+                    
+                if not retry_forever and attempt > max_retries:
                     raise last_exception
+                if attempt > max_retries:
+                    logging.info("超过最大重试次数，正在重建 Session...")
+                    self._reset_session()
+                
                 sleep_seconds = min(backoff_cap, backoff_base * attempt)
                 logging.info(f"等待 {sleep_seconds:.0f} 秒后重试...")
                 time.sleep(sleep_seconds)
