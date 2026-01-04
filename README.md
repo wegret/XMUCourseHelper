@@ -59,6 +59,17 @@ captcha:
 
 控制台测试，直接使用`python client.py`即可。然后根据提示添加课程监控、开始循环。
 
+```bash
+python -m venv venv
+source venv/bin/activate  # Linux or macOS
+.\venv\Scripts\activate     # Windows
+
+python -m pip install -r requirements.txt
+
+python client.py
+
+```
+
 
 ## 等待完成
 
