@@ -1,7 +1,7 @@
 '''
 Author: wlaten
 Date: 2025-12-27 00:52:30
-LastEditTime: 2026-01-04 18:38:27
+LastEditTime: 2026-01-04 19:27:06
 Discription: file content
 '''
 import requests
@@ -17,6 +17,7 @@ from captcha import solve_captcha
 
 warnings.simplefilter("ignore", urllib3.exceptions.InsecureRequestWarning)
 
+os.makedirs("cache", exist_ok=True)
 
 class XMUClient:
     
@@ -60,6 +61,14 @@ class XMUClient:
             logging.warning(f"初始访问首页失败: {e}")   # todo 这是网络波动
             
         return session
+    
+    def _reset_session(self):
+        """重建 session，相当于重启浏览器"""
+        logging.info("重建 Session...")
+        self.session.close()
+        self.token = None
+        self.batch_id = None
+        self.session = self._create_session()
     
     def _request(self,
                  method: str,
@@ -106,7 +115,14 @@ class XMUClient:
         return uuid, image_base64
     
     def login(self) -> bool:
+        
+        error_cnt = 0
         while True:
+            if error_cnt >= 5:
+                logging.error("连续多次登录失败，正在重建 Session...")
+                self._reset_session()
+                error_cnt = 0
+            
             uuid, image_base64 = self._get_captcha()
             
             success, captcha_code = solve_captcha(image_base64, self.config_captcha)
@@ -133,6 +149,7 @@ class XMUClient:
                 if data.get("code") != 200:
                     logging.warning(f"登录失败: {data.get('msg') or data.get('message', '未知错误')}，正在重试...")
                     time.sleep(2)
+                    error_cnt += 1
                     continue
                 
                 self.token = data["data"]["token"]
@@ -147,9 +164,11 @@ class XMUClient:
                 
                 logging.info(f"登录成功！用户: {student.get('XM', '未知')}, BatchID: {self.batch_id}")
                 return True 
+            
             except Exception as e:
                 logging.error(f"登录请求异常: {e}，正在重试...")
                 time.sleep(2)
+                error_cnt += 1
 
     @property
     def is_logged_in(self) -> bool:
