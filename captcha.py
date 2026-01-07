@@ -48,18 +48,25 @@ def _solve_manual(image_base64: str, input_func) -> str:
     """手动输入"""
     image_data = base64.b64decode(image_base64)
     image = Image.open(io.BytesIO(image_data))
-    
+
     Path("cache").mkdir(exist_ok=True)
     filename = f"cache/captcha_{time.strftime('%Y%m%d_%H%M%S')}.png"
     image.save(filename)
-    
+
     try:
         image.show()
     except:
         pass
-    
+
     print(f"验证码已保存: {filename}")
-    return True, input_func("请输入验证码: ")
+    result = input_func("请输入验证码: ")
+
+    try:
+        Path(filename).unlink()
+    except:
+        pass
+
+    return True, result
 
 
 def _solve_api(image_base64: str, token: str) -> str:
