@@ -33,7 +33,7 @@ Valid course types: `本专业计划课程`, `本专业其他年级课程`, `方
 
 **Authentication Flow** (`login.py`):
 - Loads credentials from `config/user.yaml`
-- Fetches captcha, optionally auto-solves via external API (jfbym)
+- Fetches captcha, optionally auto-solves via LLM API (OpenAI format)
 - AES-ECB encrypts password (fixed key: `MWMqg2tPcDkxcm11`)
 - Maintains session with auth token and batchId
 
@@ -63,9 +63,11 @@ campus: "6"  # 1=思明, 6=翔安, 9=漳州
 captcha_auto: False
 ```
 
-Optional `config/captcha.yaml` for auto captcha:
+Optional `config/captcha.yaml` for auto captcha (OpenAI format):
 ```yaml
-captcha_token: "<API token>"
+base_url: "https://api.openai.com/v1"
+api_key: "<API key>"
+model: "gpt-4o"  # vision-capable model
 ```
 
 ## Key Implementation Notes
