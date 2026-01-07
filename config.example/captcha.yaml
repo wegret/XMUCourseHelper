@@ -1,0 +1,3 @@
+base_url: "<自定义端点>"
+api_key: "sk-xxx"
+model: "<多模态大模型>"

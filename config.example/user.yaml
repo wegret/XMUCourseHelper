@@ -1,0 +1,5 @@
+username: "<学号>"
+password: "<密码>"
+campus: "6"      # 不填这个默认翔安校区，翔安校区填入6，漳州校区填入9，思明校区填入1
+
+captcha_auto: False     # 自动开启验证码识别，需要适配验证码API，默认False
