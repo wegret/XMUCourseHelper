@@ -16,7 +16,7 @@ import urllib3
 from typing import Any, Dict
 
 warnings.simplefilter("ignore", urllib3.exceptions.InsecureRequestWarning)
-from watch import load_class_type_map, load_watch_list, save_watch_list, watch_courses
+from watch import load_class_type_map, watch_courses
 import tkinter as tk
 from tkinter import messagebox
 
@@ -53,11 +53,11 @@ def listen_loop(
     """
     console.print(f"当前自动选课状态：{autoadd_enabled}")
     while True:
-        watch_list = load_watch_list()
+        watch_list = xmu.watch_list
         if not watch_list:
             console.print("[yellow]当前监听列表为空，请先添加监听课程。[/yellow]")
         else:
-            for course_info in watch_list[:]:  # 做副本，避免迭代时删除元素
+            for course_info in watch_list:
                 jxbid = course_info.get("JXBID")
                 course_name = course_info.get("courseName_zh", "未知课程")
                 teaching_class_type = course_info.get("clazzType")
@@ -113,11 +113,9 @@ def listen_loop(
                             )
                             print("add_result:", add_result)
                             if add_result and add_result.get("code") == 200:
-                                console.print(f"[green]选课成功: {course_name}[/green]")
-
-                                # 选课成功后从 watch_list 中移除
-                                watch_list.remove(course_info)
-                                save_watch_list(watch_list)
+                                console.print(
+                                    f"[green]已加入选课队列: {course_name}[/green]"
+                                )
                             else:
                                 error_msg = (
                                     add_result.get("msg", "未知错误")
@@ -125,7 +123,7 @@ def listen_loop(
                                     else "未知错误"
                                 )
                                 console.print(f"[red]选课失败: {error_msg}[/red]")
-                        alert_user(course_name, number_of_selected, class_capacity)
+                        # alert_user(course_name, number_of_selected, class_capacity)
                         print("继续执行....")
                     else:
                         console.print(f"[yellow]{course_name} 暂无空位[/yellow]")
