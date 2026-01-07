@@ -8,6 +8,7 @@ Discription: file content
 import requests
 import logging
 import yaml
+import os
 from urllib.parse import urlencode
 from utils.aes_util import AesUtil
 import time
@@ -73,6 +74,36 @@ class XMULogin:
                 time.sleep(1 * (i + 1))
         raise
 
+    def save_captcha_image(self, image_base64: str) -> Optional[str]:
+        """保存验证码图片到本地（仅手动验证时使用）"""
+        try:
+            from PIL import Image
+            import base64
+            import io
+
+            image_data = base64.b64decode(image_base64)
+            image = Image.open(io.BytesIO(image_data))
+
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            filename = f"cache/captcha_{timestamp}.png"
+            image.save(filename)
+            logging.info(f"验证码图片已保存为: {filename}")
+
+            image.show()
+            return filename
+        except Exception as e:
+            logging.error(f"保存验证码图片出错: {str(e)}")
+            return None
+
+    def delete_captcha_image(self, image_path: Optional[str]) -> None:
+        """删除验证码图片"""
+        if image_path and os.path.exists(image_path):
+            try:
+                os.remove(image_path)
+                logging.info(f"验证码图片已删除: {image_path}")
+            except Exception as e:
+                logging.warning(f"删除验证码图片失败: {str(e)}")
+
     def get_captcha(self) -> Optional[Dict[str, Any]]:
         """获取验证码"""
         url = "https://xk.xmu.edu.cn/xsxkxmu/auth/captcha"
@@ -88,28 +119,15 @@ class XMULogin:
                 uuid = data["data"]["uuid"]
 
                 if self.captcha_auto:
+                    # 自动验证模式，不保存图片
                     return {"uuid": uuid, "image_base64": captcha_base64}
 
-                # 将base64转换为图片
-                from PIL import Image
-                import base64
-                import io
-
-                image_data = base64.b64decode(captcha_base64)
-                image = Image.open(io.BytesIO(image_data))
-
-                # 保存验证码图片
-                timestamp = time.strftime("%Y%m%d_%H%M%S")
-                filename = f"cache/captcha_{timestamp}.png"
-                image.save(filename)
-                logging.info(f"验证码图片已保存为: {filename}")
-
-                image.show()
+                # 手动验证模式，保存图片并显示
+                image_path = self.save_captcha_image(captcha_base64)
 
                 return {
                     "uuid": uuid,
-                    "image": image,
-                    "image_path": filename,
+                    "image_path": image_path,
                     "image_base64": captcha_base64,
                 }
             else:
@@ -135,9 +153,10 @@ class XMULogin:
             except Exception as e:
                 logging.error(f"验证码识别出错: {str(e)}")
                 return False
-            print(f"验证码识别结果: {captcha_code}")
         else:
             captcha_code = input("请输入验证码: ")
+            # 用户输入完成后删除验证码图片
+            self.delete_captcha_image(captcha_result.get("image_path"))
 
         # 加密密码
         encrypted_password = self.aesutil.encrypt(self.password)
