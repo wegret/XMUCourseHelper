@@ -16,21 +16,54 @@ import yaml
 
 with open("config/captcha.yaml", "r", encoding="utf-8") as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
-captcha_token = config["captcha_token"]
+
+# 大模型 API 配置
+llm_base_url: str = config["base_url"]
+llm_api_key: str = config["api_key"]
+llm_model: str = config["model"]
 
 
-def verify(img_base64: str):
-    url = "http://api.jfbym.com/api/YmServer/customApi"
+def verify(img_base64: str) -> str:
+    """使用大模型 API 识别验证码（数学计算题）"""
+    url = f"{llm_base_url.rstrip('/')}/chat/completions"
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {llm_api_key}",
+    }
+
+    prompt = (
+        "Analyze the uploaded image and extract any visible mathematical expression "
+        "involving only addition, subtraction, multiplication, or division. "
+        "Solve the calculation and return the final integer result as a single Arabic numeral, "
+        "without any additional text, symbols, or formatting."
+    )
 
     data: dict[str, Any] = {
-        "token": captcha_token,
-        "type": 50100,
-        "image": img_base64,
+        "model": llm_model,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/png;base64,{img_base64}"
+                        },
+                    },
+                ],
+            }
+        ],
+        "max_tokens": 16,
     }
-    _headers = {"Content-Type": "application/json"}
-    response = requests.request("POST", url, headers=_headers, json=data).json()
-    print(response)
-    return response["data"]["data"]
+
+    response = requests.post(url, headers=headers, json=data, timeout=30)
+    response.raise_for_status()
+    result = response.json()
+    answer = result["choices"][0]["message"]["content"].strip()
+    print(f"验证码识别结果: {answer}")
+    return answer
 
 
 def request_with_retry(
