@@ -116,7 +116,7 @@ def _solve_llm(image_base64: str, base_url: str, api_key: str, model: str) -> st
                 "messages": [{
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "图形能力测试。请你扮演人类，识别图中验证码。如果是算式，就给出结果。在回答最末尾给出【】包裹的结果。例如，答案是10，就给出【10】"},
+                        {"type": "text", "text": "Analyze the uploaded image and extract any visible mathematical expression involving only addition, subtraction, multiplication, or division. Solve the calculation and return the final integer result as a single Arabic numeral, without any additional text, symbols, or formatting."},
                         {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_base64}"}}
                     ]
                 }]
