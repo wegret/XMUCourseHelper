@@ -1,0 +1,10 @@
+{
+  "num_classes": 3,
+  "image_size": 28,
+  "threshold_method": "otsu",
+  "class_names": [
+    "+",
+    "-",
+    "*"
+  ]
+}

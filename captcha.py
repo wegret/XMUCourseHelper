@@ -6,6 +6,7 @@ Discription: file content
 '''
 
 import base64
+import logging
 import time
 from pathlib import Path
 from PIL import Image
@@ -27,7 +28,8 @@ def solve_captcha(image_base64: str, config: dict, input_func=None) -> str:
     Returns:
         (bool, str): 识别状态和结果
     """
-    method = config.get("type", "manual")
+    config = config or {}
+    method = str(config.get("type") or "llm").strip().lower()
     
     if method == "manual":
         return _solve_manual(image_base64, input_func or input)
@@ -36,13 +38,25 @@ def solve_captcha(image_base64: str, config: dict, input_func=None) -> str:
         token = config["token"]
         return _solve_api(image_base64, token)
     
+    elif method == "vcode":
+        return _solve_vcode(image_base64)
+
     elif method == "llm":
-        return _solve_llm(
-            image_base64,
-            config["base_url"],
-            config["api_key"],
-            config["model"]
-        )
+        base_url = config.get("base_url")
+        api_key = config.get("api_key")
+        model = config.get("model")
+        if not base_url or not api_key or not model:
+            logging.info("LLM 配置不完整，回退到 vcode 识别")
+            return _solve_vcode(image_base64)
+        return _solve_llm(image_base64, base_url, api_key, model)
+
+    logging.warning(f"未知验证码识别方式: {method}，回退到 llm")
+    base_url = config.get("base_url")
+    api_key = config.get("api_key")
+    model = config.get("model")
+    if not base_url or not api_key or not model:
+        return _solve_vcode(image_base64)
+    return _solve_llm(image_base64, base_url, api_key, model)
 
 def _solve_manual(image_base64: str, input_func) -> str:
     """手动输入"""
@@ -73,6 +87,24 @@ def _solve_api(image_base64: str, token: str) -> str:
     if resp.get("code") != 10000:
         return False, f"打码平台请求失败: {resp.get('message', '未知错误')}"
     return True, resp["data"]["data"]
+
+
+def _solve_vcode(image_base64: str) -> str:
+    """使用本地 vcode 网络识别"""
+    try:
+        import numpy as np
+        from vcode import solve_captcha as vcode_solve_captcha
+    except Exception as e:
+        return False, f"vcode 模块加载失败: {e}"
+
+    try:
+        image_data = base64.b64decode(image_base64)
+        image = Image.open(io.BytesIO(image_data))
+        image_array = np.array(image)
+        result = vcode_solve_captcha(image_array)
+        return True, str(result)
+    except Exception as e:
+        return False, f"vcode 识别失败: {e}"
 
 
 def _process_image(image_base64: str,
