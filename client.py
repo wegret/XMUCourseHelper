@@ -36,7 +36,7 @@ class XMUClient:
         self.password = password
         self.campus = campus
         self.aes = AesUtil("MWMqg2tPcDkxcm11")
-        self.config_captcha = config_captcha
+        self.config_captcha = self._normalize_captcha_config(config_captcha)
         self.auto_add_enable = auto_add_enable
         self.check_interval = check_interval
         
@@ -48,6 +48,11 @@ class XMUClient:
         self.watch_list = {}  # KCH -> {JXBID: { last_selected: int, capacity: int, subscribers: list }}
         
         self.last_request_time = 0
+
+    def _normalize_captcha_config(self, config_captcha: dict) -> dict:
+        config = dict(config_captcha or {})
+        config["type"] = str(config.get("type") or "llm").strip().lower()
+        return config
         
     def _create_session(self) -> requests.Session:
         session = requests.Session()
