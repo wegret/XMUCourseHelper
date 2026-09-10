@@ -19,6 +19,7 @@ XMUCourseHelper
 │  ├─ solver.py
 │  └─ splitter.py
 ├─ client.py                # 主要的客户端逻辑
+├─ gui.py                   # PySide6 图形界面
 ├─ info
 │  ├─ clazzType.json
 │  ├─ FXYX.json
@@ -75,6 +76,28 @@ captcha:
 
 ## 使用方法
 
+### 图形界面
+
+直接运行 `python gui.py`，首次启动会进入「配置」页，填写学号/密码/校区/验证码配置后点击「保存配置」即可自动登录。
+
+界面分四个面板：
+
+1. **配置**：编辑 `config/user.yaml` 的所有字段（账号、校区、自动选课开关、检查间隔、验证码方式与 LLM 凭据）
+2. **课程搜索**：按关键词搜索课程，勾选结果后批量加入监控
+3. **监控列表**：查看已监控课程、删除监控项，每行带空位状态徽章
+4. **运行监控**：开始/停止监控循环，实时日志与变更提示
+
+```bash
+python -m venv venv
+source venv/bin/activate  # Linux or macOS
+.\venv\Scripts\activate     # Windows
+
+python -m pip install -r requirements.txt
+python gui.py
+```
+
+### 控制台测试
+
 控制台测试，直接使用`python client.py`即可。然后根据提示添加课程监控、开始循环。
 
 ```bash
@@ -95,4 +118,4 @@ python client.py
 
 - [ ] 增加github actions部署支持
 
-- [ ] 增加GUI。
+- [x] 增加GUI。
