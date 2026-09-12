@@ -412,6 +412,8 @@ class MonitorWorker(QThread):
                     )
 
                 for change in changes:
+                    if self._stop_flag:
+                        break
                     # 变更本身由 _on_change 处理并打印
                     self.change_signal.emit(change)
                     if self.client.auto_add_enable and change.get("has_vacancy"):
@@ -460,7 +462,7 @@ class ConfigPanel(QWidget):
     CAPTCHA_OPTIONS = [
         ("llm",    "LLM 多模态识别"),
         ("vcode",  "本地 vcode 网络"),
-        ("manual", "手动输入"),
+        # ("manual", "手动输入"),   # todo GUI似乎暂时还没有手动输入的地方
     ]
 
     def __init__(self, config_path: str, parent=None):
